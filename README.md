@@ -2,7 +2,9 @@
 
 Companion admin plugin for [`@payloadcms/plugin-nested-docs`](https://payloadcms.com/docs/plugins/nested-docs).
 
-<img alt="Page tree demo" src="assets/page-tree.gif" width="100%" />
+<p align="center">
+  <img alt="Page tree demo" src="assets/page-tree.gif" width="100%" />
+</p>
 
 Adds a nested tree list view for nested docs collections in Payload admin, with drag-and-drop parent changes and status badges for published / changed / draft documents.
 

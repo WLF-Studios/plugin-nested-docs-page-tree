@@ -40,12 +40,7 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": [
-    "dist",
-    "assets",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "pnpm clean && pnpm build:types && pnpm build:swc && pnpm copyfiles && pnpm build:strip-tests",
     "build:strip-tests": "rimraf \"dist/**/*.spec.*\"",
