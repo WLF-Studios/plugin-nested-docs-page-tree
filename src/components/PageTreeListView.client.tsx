@@ -9,6 +9,7 @@ import {
   DragOverlay,
   type DragStartEvent,
   PointerSensor,
+  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
@@ -18,6 +19,8 @@ import {
   ListQueryProvider,
   SelectAll,
   SelectRow,
+  SortHeader,
+  SortRow,
   toast,
   useConfig,
   useLocale,
@@ -34,9 +37,15 @@ import type {
 import {
   buildInsertDropTargets,
   getDropTargetParentDoc,
+  getOrderPlacementFromDropTarget,
   type PageTreeDropTarget,
+  type PageTreeOrderPlacement,
 } from '../utilities/dropTargets.js'
-import { CANCEL_DRAG_MESSAGE, getDropValidation, type PageTreeDropValidation } from '../utilities/moveValidation.js'
+import {
+  CANCEL_DRAG_MESSAGE,
+  getDropValidation,
+  type PageTreeDropValidation,
+} from '../utilities/moveValidation.js'
 import {
   buildDocSlugPath,
   buildPageTreeDocs,
@@ -61,6 +70,7 @@ type PageTreeListViewClientOwnProps = {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   canMoveDocs: boolean
   columnState: Column[]
+  orderableFieldName?: string
   parentFieldSlug: string
   query: ListQuery
   sourceDocs: PageTreeSourceDoc[]
@@ -71,11 +81,191 @@ type PageTreeListViewClientProps = Omit<ListViewClientProps, 'columnState' | 'Ta
   PageTreeListViewClientOwnProps
 
 type SelectableRowData = React.ComponentProps<typeof SelectRow>['rowData']
+type PageTreeDragData = {
+  dragType?: 'move' | 'order'
+  rowID?: string
+}
+type ReorderDirection = 'greater' | 'less'
 
 const SILENT_MOVE_MESSAGES = new Set([CANCEL_DRAG_MESSAGE])
 
 function getRowDropID(rowID: string): string {
   return `page-drop:${rowID}`
+}
+
+function getPageTreeDragData(value: unknown): PageTreeDragData {
+  return value && typeof value === 'object' ? (value as PageTreeDragData) : {}
+}
+
+function getPayloadDocID(doc: PageTreeDoc): number | string | undefined {
+  return typeof doc.id === 'number' || typeof doc.id === 'string' ? doc.id : undefined
+}
+
+function getPayloadDocIDString(doc: PageTreeDoc | undefined): string | undefined {
+  const id = doc ? getPayloadDocID(doc) : undefined
+
+  return id === undefined ? undefined : String(id)
+}
+
+function getOrderInsertIndexFromDropTarget(args: {
+  docs: PageTreeDoc[]
+  dropTarget?: PageTreeDropTarget
+  moveFromIndex: number
+}): null | number {
+  const { docs, dropTarget, moveFromIndex } = args
+
+  if (!dropTarget) {
+    return null
+  }
+
+  if (dropTarget.dropType === 'row') {
+    const targetIndex = docs.findIndex((doc) => doc.__pageTreeID === dropTarget.rowID)
+
+    return targetIndex >= 0 ? targetIndex : null
+  }
+
+  const insertIndex = Number.parseInt(dropTarget.dropID.split(':')[1] ?? '', 10)
+
+  if (Number.isNaN(insertIndex)) {
+    return null
+  }
+
+  const adjustedIndex = insertIndex > moveFromIndex ? insertIndex - 1 : insertIndex
+
+  return Math.min(Math.max(adjustedIndex, 0), Math.max(docs.length - 1, 0))
+}
+
+function getManualOrderDropValidation(args: {
+  activeDoc: PageTreeDoc
+  targetDoc?: PageTreeDoc
+}): PageTreeDropValidation {
+  const { activeDoc, targetDoc } = args
+
+  if (!targetDoc) {
+    return {
+      isValid: true,
+      parentID: null,
+    }
+  }
+
+  if (targetDoc.__pageTreeID === activeDoc.__pageTreeID) {
+    return {
+      isValid: false,
+      message: CANCEL_DRAG_MESSAGE,
+      parentID: targetDoc.__pageTreeID,
+    }
+  }
+
+  if (targetDoc.__pageTreeAncestorIDs.includes(activeDoc.__pageTreeID)) {
+    return {
+      isValid: false,
+      message: 'A document cannot be moved under one of its descendants.',
+      parentID: targetDoc.__pageTreeID,
+    }
+  }
+
+  return {
+    isValid: true,
+    parentID: targetDoc.__pageTreeID,
+  }
+}
+
+function getDropValidationForMode(args: {
+  activeDoc: PageTreeDoc
+  allowSameParent: boolean
+  targetDoc?: PageTreeDoc
+}): PageTreeDropValidation {
+  const { activeDoc, allowSameParent, targetDoc } = args
+
+  if (allowSameParent) {
+    return getManualOrderDropValidation({
+      activeDoc,
+      targetDoc,
+    })
+  }
+
+  return getDropValidation({
+    activeDoc,
+    targetDoc,
+  })
+}
+
+function getCurrentOrderPlacement(args: {
+  activeDoc: PageTreeDoc
+  docs: PageTreeDoc[]
+}): PageTreeOrderPlacement {
+  const { activeDoc, docs } = args
+  const activeIndex = docs.findIndex((doc) => doc.__pageTreeID === activeDoc.__pageTreeID)
+  const movingSubtreeIDs = new Set(
+    docs
+      .filter(
+        (doc) =>
+          doc.__pageTreeID === activeDoc.__pageTreeID ||
+          doc.__pageTreeAncestorIDs.includes(activeDoc.__pageTreeID),
+      )
+      .map((doc) => doc.__pageTreeID),
+  )
+  const siblingIsNotMoving = (doc: PageTreeDoc) =>
+    doc.__pageTreeParentID === activeDoc.__pageTreeParentID &&
+    !movingSubtreeIDs.has(doc.__pageTreeID)
+
+  if (activeIndex < 0) {
+    return {
+      nextSiblingID: null,
+      parentID: activeDoc.__pageTreeParentID,
+      previousSiblingID: null,
+    }
+  }
+
+  return {
+    nextSiblingID: docs.slice(activeIndex + 1).find(siblingIsNotMoving)?.__pageTreeID ?? null,
+    parentID: activeDoc.__pageTreeParentID,
+    previousSiblingID:
+      docs.slice(0, activeIndex).filter(siblingIsNotMoving).at(-1)?.__pageTreeID ?? null,
+  }
+}
+
+function orderPlacementHasChanged(
+  currentPlacement: PageTreeOrderPlacement,
+  nextPlacement: PageTreeOrderPlacement,
+): boolean {
+  return (
+    currentPlacement.parentID !== nextPlacement.parentID ||
+    currentPlacement.previousSiblingID !== nextPlacement.previousSiblingID ||
+    currentPlacement.nextSiblingID !== nextPlacement.nextSiblingID
+  )
+}
+
+function getReorderTargetFromPlacement(args: {
+  currentSort?: string
+  docsByID: ReadonlyMap<string, PageTreeDoc>
+  orderableFieldName: string
+  placement: PageTreeOrderPlacement
+}): null | {
+  newKeyWillBe: ReorderDirection
+  targetDoc: PageTreeDoc
+} {
+  const { currentSort, docsByID, orderableFieldName, placement } = args
+  const targetDocID = placement.previousSiblingID ?? placement.nextSiblingID
+
+  if (!targetDocID) {
+    return null
+  }
+
+  const targetDoc = docsByID.get(targetDocID)
+
+  if (!targetDoc) {
+    return null
+  }
+
+  return {
+    newKeyWillBe:
+      (placement.previousSiblingID !== null && currentSort === orderableFieldName) ||
+      (placement.previousSiblingID === null && currentSort === `-${orderableFieldName}`)
+        ? 'greater'
+        : 'less',
+    targetDoc,
+  }
 }
 
 function buildPaginatedData(
@@ -208,17 +398,58 @@ function renderStatusBadge(args: {
   )
 }
 
+function PageTreeOrderCell({
+  children,
+  disabled,
+  rowID,
+}: {
+  children: React.ReactNode
+  disabled: boolean
+  rowID: string
+}) {
+  const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
+    data: {
+      dragType: 'order',
+      rowID,
+    } satisfies PageTreeDragData,
+    disabled,
+    id: `page-order-drag:${rowID}`,
+  })
+
+  return (
+    <div
+      {...attributes}
+      {...listeners}
+      data-order-dragging={isDragging ? 'true' : 'false'}
+      ref={setNodeRef}
+    >
+      {children}
+    </div>
+  )
+}
+
 function buildTableColumns(args: {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   columnState: Column[]
   docs: PageTreeDoc[]
   enableRowSelections?: boolean
+  orderDragIsDisabled: boolean
+  orderableFieldName?: string
   parentFieldSlug: string
   t: (key: 'general:noValue' | 'version:changed' | 'version:draft' | 'version:published') => string
   useAsTitle: string
 }): Column[] {
-  const { badgeConfig, columnState, docs, enableRowSelections, parentFieldSlug, t, useAsTitle } =
-    args
+  const {
+    badgeConfig,
+    columnState,
+    docs,
+    enableRowSelections,
+    orderDragIsDisabled,
+    orderableFieldName,
+    parentFieldSlug,
+    t,
+    useAsTitle,
+  } = args
   const columnsToUse = columnState.map((column) => {
     if (column.accessor === useAsTitle) {
       return {
@@ -272,6 +503,24 @@ function buildTableColumns(args: {
       Heading: <SelectAll />,
       renderedCells: docs.map((doc, index) => (
         <SelectRow key={doc.__pageTreeID ?? index} rowData={getSelectableRowData(doc)} />
+      )),
+    })
+  }
+
+  if (orderableFieldName && !columnsToUse.some((column) => column.accessor === '_dragHandle')) {
+    columnsToUse.unshift({
+      accessor: '_dragHandle',
+      active: true,
+      field: { hidden: true } as Column['field'],
+      Heading: <SortHeader />,
+      renderedCells: docs.map((doc, index) => (
+        <PageTreeOrderCell
+          disabled={orderDragIsDisabled}
+          key={doc.__pageTreeID ?? index}
+          rowID={doc.__pageTreeID}
+        >
+          <SortRow />
+        </PageTreeOrderCell>
       )),
     })
   }
@@ -375,12 +624,14 @@ function HierarchyTableRow({
 function HierarchyTable({
   activeDragRowID,
   allDocsByID,
+  allowSameParentDrops,
   columns,
   data,
   isMovePending,
 }: {
   activeDragRowID: null | string
   allDocsByID: ReadonlyMap<string, PageTreeDoc>
+  allowSameParentDrops: boolean
   columns: Column[]
   data: PageTreeDoc[]
   isMovePending: boolean
@@ -399,13 +650,14 @@ function HierarchyTable({
     return new Map(
       data.map((doc) => [
         doc.__pageTreeID,
-        getDropValidation({
+        getDropValidationForMode({
           activeDoc,
+          allowSameParent: allowSameParentDrops,
           targetDoc: doc,
         }),
       ]),
     )
-  }, [activeDoc, data])
+  }, [activeDoc, allowSameParentDrops, data])
   const insertDropValidationByID = React.useMemo(() => {
     if (!activeDoc) {
       return new Map<string, PageTreeDropValidation>()
@@ -414,8 +666,9 @@ function HierarchyTable({
     return new Map(
       insertDropTargets.map((dropTarget) => [
         dropTarget.dropID,
-        getDropValidation({
+        getDropValidationForMode({
           activeDoc,
+          allowSameParent: allowSameParentDrops,
           targetDoc:
             dropTarget.parentID === null
               ? undefined
@@ -423,7 +676,7 @@ function HierarchyTable({
         }),
       ]),
     )
-  }, [activeDoc, allDocsByID, insertDropTargets])
+  }, [activeDoc, allowSameParentDrops, allDocsByID, insertDropTargets])
 
   if (activeColumns.length === 0) {
     return <div>No columns selected</div>
@@ -498,6 +751,7 @@ export default function PageTreeListViewClient({
   badgeConfig,
   canMoveDocs,
   columnState,
+  orderableFieldName,
   parentFieldSlug,
   query,
   sourceDocs,
@@ -512,7 +766,13 @@ export default function PageTreeListViewClient({
   const [activeDragRowID, setActiveDragRowID] = React.useState<null | string>(null)
   const [activeDropTarget, setActiveDropTarget] = React.useState<null | PageTreeDropTarget>(null)
   const [collapsedIDs, setCollapsedIDs] = React.useState<Set<string>>(() => new Set())
+  const [localSourceDocs, setLocalSourceDocs] = React.useState(sourceDocs)
   const [pendingMoveRowID, setPendingMoveRowID] = React.useState<null | string>(null)
+  const [pendingOrderRowID, setPendingOrderRowID] = React.useState<null | string>(null)
+
+  React.useEffect(() => {
+    setLocalSourceDocs(sourceDocs)
+  }, [sourceDocs])
 
   const toggleRow = React.useCallback((rowID: string) => {
     setCollapsedIDs((currentState) => {
@@ -536,6 +796,10 @@ export default function PageTreeListViewClient({
 
     return normalizeSort(query.sort as string | string[] | undefined)
   }, [query.sort, searchParams])
+  const manualOrderIsActive = Boolean(
+    orderableFieldName &&
+      (currentSort === orderableFieldName || currentSort === `-${orderableFieldName}`),
+  )
   const currentLimit = React.useMemo(
     () =>
       normalizePositiveInt(
@@ -554,11 +818,11 @@ export default function PageTreeListViewClient({
   )
   const liveAllDocs = React.useMemo(
     () =>
-      buildPageTreeDocs(sourceDocs, {
+      buildPageTreeDocs(localSourceDocs, {
         parentFieldSlug,
         sort: currentSort,
       }),
-    [currentSort, parentFieldSlug, sourceDocs],
+    [currentSort, localSourceDocs, parentFieldSlug],
   )
   const collapseResetKey = React.useMemo(
     () => JSON.stringify([props.collectionSlug, props.viewType, searchParams.toString()]),
@@ -569,10 +833,18 @@ export default function PageTreeListViewClient({
       activeDragRowID,
       canMoveDocs,
       collapsedIDs,
+      disableMoveDrag: pendingOrderRowID !== null,
       pendingMoveRowID,
       toggleRow,
     }),
-    [activeDragRowID, canMoveDocs, collapsedIDs, pendingMoveRowID, toggleRow],
+    [
+      activeDragRowID,
+      canMoveDocs,
+      collapsedIDs,
+      pendingMoveRowID,
+      pendingOrderRowID,
+      toggleRow,
+    ],
   )
 
   React.useEffect(() => {
@@ -617,6 +889,12 @@ export default function PageTreeListViewClient({
         columnState: paginatedColumnState,
         docs: paginatedDocs,
         enableRowSelections: props.enableRowSelections,
+        orderDragIsDisabled:
+          !canMoveDocs ||
+          !orderableFieldName ||
+          pendingMoveRowID !== null ||
+          pendingOrderRowID !== null,
+        orderableFieldName,
         parentFieldSlug,
         t: i18n.t,
         useAsTitle,
@@ -625,7 +903,11 @@ export default function PageTreeListViewClient({
       paginatedColumnState,
       paginatedDocs,
       badgeConfig,
+      orderableFieldName,
       parentFieldSlug,
+      canMoveDocs,
+      pendingMoveRowID,
+      pendingOrderRowID,
       props.enableRowSelections,
       i18n.t,
       useAsTitle,
@@ -648,8 +930,9 @@ export default function PageTreeListViewClient({
       docsByID: allDocsByID,
       dropTarget: activeDropTarget,
     })
-    const dropValidation = getDropValidation({
+    const dropValidation = getDropValidationForMode({
       activeDoc: activeDragDoc,
+      allowSameParent: manualOrderIsActive,
       targetDoc: targetDoc ?? undefined,
     })
 
@@ -665,8 +948,8 @@ export default function PageTreeListViewClient({
       docsByID: allDocsByID,
       targetDoc: targetDoc ?? undefined,
     })
-  }, [activeDragDoc, activeDropTarget, allDocsByID])
-  const isMovePending = pendingMoveRowID !== null
+  }, [activeDragDoc, activeDropTarget, allDocsByID, manualOrderIsActive])
+  const isMovePending = pendingMoveRowID !== null || pendingOrderRowID !== null
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -674,26 +957,406 @@ export default function PageTreeListViewClient({
       },
     }),
   )
+  const moveDocument = React.useCallback(
+    async (args: { parentID: null | string; rowID: string }) => {
+      const { parentID, rowID } = args
+      const params = new URLSearchParams()
+
+      if (locale?.code) {
+        params.set('locale', locale.code)
+      }
+
+      const response = await fetch(
+        `${config.routes.api}/${props.collectionSlug}/${encodeURIComponent(rowID)}/move${
+          params.size > 0 ? `?${params.toString()}` : ''
+        }`,
+        {
+          body: JSON.stringify({
+            parentID,
+          }),
+          credentials: 'include',
+          headers: {
+            'Accept-Language': i18n.language,
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+        },
+      )
+      const result = (await response.json().catch(() => null)) as
+        | {
+            message?: string
+          }
+        | null
+
+      if (!response.ok) {
+        throw new Error(result?.message ?? 'Could not move document.')
+      }
+
+      return result
+    },
+    [config.routes.api, i18n.language, locale?.code, props.collectionSlug],
+  )
+  const reorderDocument = React.useCallback(
+    async (args: {
+      movedDocID: number | string
+      newKeyWillBe: ReorderDirection
+      targetDoc: PageTreeDoc
+    }) => {
+      const { movedDocID, newKeyWillBe, targetDoc } = args
+      const targetID = getPayloadDocID(targetDoc)
+
+      if (!orderableFieldName || targetID === undefined) {
+        return undefined
+      }
+
+      const params = new URLSearchParams()
+
+      if (locale?.code) {
+        params.set('locale', locale.code)
+      }
+
+      const response = await fetch(
+        `${config.routes.api}/reorder${params.size > 0 ? `?${params.toString()}` : ''}`,
+        {
+          body: JSON.stringify({
+            collectionSlug: props.collectionSlug,
+            docsToMove: [movedDocID],
+            newKeyWillBe,
+            orderableFieldName,
+            target: {
+              id: targetID,
+              key: targetDoc[orderableFieldName],
+            },
+          }),
+          credentials: 'include',
+          headers: {
+            'Accept-Language': i18n.language,
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+        },
+      )
+      const result = (await response.json().catch(() => null)) as
+        | {
+            message?: string
+            orderValues?: unknown[]
+          }
+        | null
+
+      if (response.status === 403) {
+        throw new Error('You do not have permission to reorder these rows')
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          'Failed to reorder. This can happen if you reorder several rows too quickly. Please try again.',
+        )
+      }
+
+      if (result?.message === 'initial migration') {
+        throw new Error(
+          'You have enabled "orderable" on a collection with existing documents and this is the first time you have sorted documents. We have run an automatic migration to add an initial order to the documents. Please refresh the page and try again.',
+        )
+      }
+
+      return result?.orderValues?.[0]
+    },
+    [
+      config.routes.api,
+      i18n.language,
+      locale?.code,
+      orderableFieldName,
+      props.collectionSlug,
+    ],
+  )
+  const handleOrderDragEnd = React.useCallback(
+    async (event: DragEndEvent) => {
+      const dragData = getPageTreeDragData(event.active.data.current)
+      const rowID = dragData.rowID
+
+      if (!rowID || !orderableFieldName) {
+        return
+      }
+
+      if (currentSort !== orderableFieldName && currentSort !== `-${orderableFieldName}`) {
+        toast.warning('To reorder the rows you must first sort them by the "Order" column')
+        return
+      }
+
+      const movedDoc = paginatedDocsByID.get(rowID)
+      const moveFromIndex = paginatedDocs.findIndex((doc) => doc.__pageTreeID === rowID)
+      const dropTarget = event.over?.data.current as PageTreeDropTarget | undefined
+      const insertIndex = getOrderInsertIndexFromDropTarget({
+        docs: paginatedDocs,
+        dropTarget,
+        moveFromIndex,
+      })
+
+      if (!movedDoc || moveFromIndex < 0 || insertIndex === null) {
+        return
+      }
+
+      const movedDocID = getPayloadDocID(movedDoc)
+
+      if (movedDocID === undefined) {
+        return
+      }
+
+      const docsWithoutMoved = paginatedDocs.filter((doc) => doc.__pageTreeID !== rowID)
+      const newBeforeRow = docsWithoutMoved[insertIndex - 1]
+      const newAfterRow = docsWithoutMoved[insertIndex]
+      const currentBeforeID = getPayloadDocIDString(paginatedDocs[moveFromIndex - 1])
+      const currentAfterID = getPayloadDocIDString(paginatedDocs[moveFromIndex + 1])
+      const nextBeforeID = getPayloadDocIDString(newBeforeRow)
+      const nextAfterID = getPayloadDocIDString(newAfterRow)
+
+      if (currentBeforeID === nextBeforeID && currentAfterID === nextAfterID) {
+        return
+      }
+
+      const reorderTargetDoc = newBeforeRow ?? newAfterRow
+
+      if (!reorderTargetDoc) {
+        return
+      }
+
+      const newKeyWillBe =
+        (newBeforeRow && currentSort === orderableFieldName) ||
+        (!newBeforeRow && currentSort === `-${orderableFieldName}`)
+          ? 'greater'
+          : 'less'
+      setPendingOrderRowID(rowID)
+
+      try {
+        const nextOrderValue = await reorderDocument({
+          movedDocID,
+          newKeyWillBe,
+          targetDoc: reorderTargetDoc,
+        })
+
+        if (typeof nextOrderValue === 'string') {
+          setLocalSourceDocs((currentDocs) =>
+            currentDocs.map((doc) =>
+              String(doc.id ?? '') === String(movedDocID)
+                ? {
+                    ...doc,
+                    [orderableFieldName]: nextOrderValue,
+                  }
+                : doc,
+            ),
+          )
+        }
+
+        React.startTransition(() => {
+          router.refresh()
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+
+        toast.error(message)
+      } finally {
+        setPendingOrderRowID(null)
+      }
+    },
+    [
+      currentSort,
+      orderableFieldName,
+      paginatedDocs,
+      paginatedDocsByID,
+      reorderDocument,
+      router,
+    ],
+  )
+  const handleManualOrderMoveEnd = React.useCallback(
+    async (args: {
+      activeDoc: PageTreeDoc
+      dropTarget: PageTreeDropTarget
+      rowID: string
+    }) => {
+      const { activeDoc, dropTarget, rowID } = args
+
+      if (!orderableFieldName) {
+        return
+      }
+
+      const targetDoc = getDropTargetParentDoc({
+        docsByID: allDocsByID,
+        dropTarget,
+      })
+      const dropValidation = getManualOrderDropValidation({
+        activeDoc,
+        targetDoc: targetDoc ?? undefined,
+      })
+
+      if (!dropValidation.isValid) {
+        if (!shouldSilenceMoveMessage(dropValidation.message)) {
+          toast.error(dropValidation.message ?? 'Could not move document.')
+        }
+
+        return
+      }
+
+      const placement = getOrderPlacementFromDropTarget({
+        activeDoc,
+        docs: paginatedDocs,
+        docsByID: allDocsByID,
+        dropTarget,
+      })
+
+      if (!placement) {
+        return
+      }
+
+      const currentPlacement = getCurrentOrderPlacement({
+        activeDoc,
+        docs: paginatedDocs,
+      })
+      const parentChanged = activeDoc.__pageTreeParentID !== placement.parentID
+      const orderChanged = orderPlacementHasChanged(currentPlacement, placement)
+      const reorderTarget = orderChanged
+        ? getReorderTargetFromPlacement({
+            currentSort,
+            docsByID: allDocsByID,
+            orderableFieldName,
+            placement,
+          })
+        : null
+
+      if (!parentChanged && !reorderTarget) {
+        return
+      }
+
+      const movedDocID = getPayloadDocID(activeDoc)
+
+      if (movedDocID === undefined) {
+        return
+      }
+
+      const parentDoc = placement.parentID ? allDocsByID.get(placement.parentID) : undefined
+      const nextParentValue =
+        placement.parentID === null
+          ? null
+          : parentDoc
+            ? getPayloadDocID(parentDoc) ?? placement.parentID
+            : placement.parentID
+      let parentMoveSucceeded = false
+
+      setPendingMoveRowID(rowID)
+
+      try {
+        if (parentChanged) {
+          await moveDocument({
+            parentID: placement.parentID,
+            rowID,
+          })
+          parentMoveSucceeded = true
+        }
+
+        const nextOrderValue = reorderTarget
+          ? await reorderDocument({
+              movedDocID,
+              newKeyWillBe: reorderTarget.newKeyWillBe,
+              targetDoc: reorderTarget.targetDoc,
+            })
+          : undefined
+
+        if (parentChanged || typeof nextOrderValue === 'string') {
+          setLocalSourceDocs((currentDocs) =>
+            currentDocs.map((doc) =>
+              String(doc.id ?? '') === String(movedDocID)
+                ? {
+                    ...doc,
+                    ...(parentChanged
+                      ? {
+                          [parentFieldSlug]: nextParentValue,
+                        }
+                      : {}),
+                    ...(typeof nextOrderValue === 'string'
+                      ? {
+                          [orderableFieldName]: nextOrderValue,
+                        }
+                      : {}),
+                  }
+                : doc,
+            ),
+          )
+        }
+
+        if (parentChanged) {
+          toast.success(`Moved "${getDocDisplayLabel(activeDoc)}".`)
+        }
+
+        React.startTransition(() => {
+          router.refresh()
+        })
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message ? error.message : 'Could not move document.'
+
+        toast.error(
+          parentMoveSucceeded
+            ? `Moved "${getDocDisplayLabel(activeDoc)}", but could not update its manual order. ${message}`
+            : message,
+        )
+
+        if (parentMoveSucceeded) {
+          React.startTransition(() => {
+            router.refresh()
+          })
+        }
+      } finally {
+        setPendingMoveRowID(null)
+      }
+    },
+    [
+      allDocsByID,
+      currentSort,
+      moveDocument,
+      orderableFieldName,
+      paginatedDocs,
+      parentFieldSlug,
+      reorderDocument,
+      router,
+    ],
+  )
   const handleDragCancel = React.useCallback(() => {
     setActiveDragRowID(null)
     setActiveDropTarget(null)
+    setPendingOrderRowID(null)
   }, [])
   const handleDragStart = React.useCallback(
     (event: DragStartEvent) => {
+      const dragData = getPageTreeDragData(event.active.data.current)
+
+      if (dragData.dragType === 'order') {
+        if (!canMoveDocs || !orderableFieldName || isMovePending) {
+          return
+        }
+
+        return
+      }
+
       if (!canMoveDocs || isMovePending) {
         return
       }
 
-      const rowID = event.active.data.current?.rowID
+      const rowID = dragData.rowID
 
       if (typeof rowID === 'string' && paginatedDocsByID.has(rowID)) {
         setActiveDragRowID(rowID)
         setActiveDropTarget(null)
       }
     },
-    [canMoveDocs, isMovePending, paginatedDocsByID],
+    [canMoveDocs, isMovePending, orderableFieldName, paginatedDocsByID],
   )
   const handleDragOver = React.useCallback((event: DragOverEvent) => {
+    const dragData = getPageTreeDragData(event.active.data.current)
+
+    if (dragData.dragType === 'order') {
+      setActiveDropTarget(null)
+      return
+    }
+
     const overData = event.over?.data.current as PageTreeDropTarget | undefined
 
     if (!overData) {
@@ -715,14 +1378,32 @@ export default function PageTreeListViewClient({
   }, [])
   const handleDragEnd = React.useCallback(
     async (event: DragEndEvent) => {
-      const rowID = event.active.data.current?.rowID
+      const dragData = getPageTreeDragData(event.active.data.current)
+
+      if (dragData.dragType === 'order') {
+        setActiveDragRowID(null)
+        setActiveDropTarget(null)
+        await handleOrderDragEnd(event)
+        return
+      }
+
+      const rowID = dragData.rowID
       const activeDoc = typeof rowID === 'string' ? paginatedDocsByID.get(rowID) ?? null : null
       const overData = event.over?.data.current as PageTreeDropTarget | undefined
 
       setActiveDragRowID(null)
       setActiveDropTarget(null)
 
-      if (!activeDoc || !overData) {
+      if (!rowID || !activeDoc || !overData) {
+        return
+      }
+
+      if (manualOrderIsActive && orderableFieldName) {
+        await handleManualOrderMoveEnd({
+          activeDoc,
+          dropTarget: overData,
+          rowID,
+        })
         return
       }
 
@@ -743,46 +1424,13 @@ export default function PageTreeListViewClient({
         return
       }
 
-      const apiRoute = config.routes.api
-      const params = new URLSearchParams()
-
-      if (locale?.code) {
-        params.set('locale', locale.code)
-      }
-
       setPendingMoveRowID(rowID)
 
       try {
-        const response = await fetch(
-          `${apiRoute}/${props.collectionSlug}/${encodeURIComponent(rowID)}/move${
-            params.size > 0 ? `?${params.toString()}` : ''
-          }`,
-          {
-            body: JSON.stringify({
-              parentID: dropValidation.parentID,
-            }),
-            credentials: 'include',
-            headers: {
-              'Accept-Language': i18n.language,
-              'Content-Type': 'application/json',
-            },
-            method: 'POST',
-          },
-        )
-        const result = (await response.json().catch(() => null)) as
-          | {
-              message?: string
-            }
-          | null
-
-        if (!response.ok) {
-          if (shouldSilenceMoveMessage(result?.message)) {
-            return
-          }
-
-          toast.error(result?.message ?? 'Could not move document.')
-          return
-        }
+        await moveDocument({
+          parentID: dropValidation.parentID,
+          rowID,
+        })
 
         toast.success(`Moved "${getDocDisplayLabel(activeDoc)}".`)
         React.startTransition(() => {
@@ -792,6 +1440,10 @@ export default function PageTreeListViewClient({
         const message =
           error instanceof Error && error.message ? error.message : 'Could not move document.'
 
+        if (shouldSilenceMoveMessage(message)) {
+          return
+        }
+
         toast.error(message)
       } finally {
         setPendingMoveRowID(null)
@@ -799,11 +1451,12 @@ export default function PageTreeListViewClient({
     },
     [
       allDocsByID,
-      config.routes.api,
-      i18n.language,
-      locale?.code,
+      handleManualOrderMoveEnd,
+      handleOrderDragEnd,
+      manualOrderIsActive,
+      moveDocument,
+      orderableFieldName,
       paginatedDocsByID,
-      props.collectionSlug,
       router,
     ],
   )
@@ -827,6 +1480,7 @@ export default function PageTreeListViewClient({
         <HierarchyTable
           activeDragRowID={activeDragRowID}
           allDocsByID={allDocsByID}
+          allowSameParentDrops={manualOrderIsActive}
           columns={tableColumns}
           data={paginatedDocs}
           isMovePending={isMovePending}
@@ -847,6 +1501,7 @@ export default function PageTreeListViewClient({
       handleDragStart,
       isMovePending,
       allDocsByID,
+      manualOrderIsActive,
       paginatedDocs,
       sensors,
       tableColumns,
@@ -860,6 +1515,7 @@ export default function PageTreeListViewClient({
           collectionSlug={props.collectionSlug}
           data={paginatedData}
           modifySearchParams
+          orderableFieldName={orderableFieldName}
           query={{
             ...query,
             limit: currentLimit,

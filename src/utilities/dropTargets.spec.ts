@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildInsertDropTargets, getDropTargetParentDoc } from './dropTargets.js'
+import {
+  buildInsertDropTargets,
+  getDropTargetParentDoc,
+  getOrderPlacementFromDropTarget,
+} from './dropTargets.js'
 import { buildPageTreeDocs, type PageTreeSourceDoc } from './pageTree.js'
 
 const docs: PageTreeSourceDoc[] = [
@@ -81,5 +85,82 @@ describe('getDropTargetParentDoc', () => {
         dropTarget: buildInsertDropTargets(treeDocs)[3] ?? null,
       }),
     ).toBeNull()
+  })
+})
+
+describe('getOrderPlacementFromDropTarget', () => {
+  it('returns root sibling anchors for same-parent root reordering', () => {
+    expect(
+      getOrderPlacementFromDropTarget({
+        activeDoc: docsByID.get('4')!,
+        docs: treeDocs,
+        docsByID,
+        dropTarget: buildInsertDropTargets(treeDocs)[0] ?? null,
+      }),
+    ).toEqual({
+      nextSiblingID: '1',
+      parentID: null,
+      previousSiblingID: null,
+    })
+  })
+
+  it('places row drops as the last child of the target row', () => {
+    expect(
+      getOrderPlacementFromDropTarget({
+        activeDoc: docsByID.get('4')!,
+        docs: treeDocs,
+        docsByID,
+        dropTarget: {
+          dropType: 'row',
+          insertAfterDropID: 'page-insert:2',
+          insertBeforeDropID: 'page-insert:1',
+          rowID: '1',
+        },
+      }),
+    ).toEqual({
+      nextSiblingID: null,
+      parentID: '1',
+      previousSiblingID: '2',
+    })
+  })
+
+  it('excludes the moving subtree from sibling anchors', () => {
+    expect(
+      getOrderPlacementFromDropTarget({
+        activeDoc: docsByID.get('2')!,
+        docs: treeDocs,
+        docsByID,
+        dropTarget: {
+          dropType: 'row',
+          insertAfterDropID: 'page-insert:1',
+          insertBeforeDropID: 'page-insert:0',
+          rowID: '1',
+        },
+      }),
+    ).toEqual({
+      nextSiblingID: null,
+      parentID: '1',
+      previousSiblingID: null,
+    })
+  })
+
+  it('returns no sibling anchors when moving into an empty parent', () => {
+    expect(
+      getOrderPlacementFromDropTarget({
+        activeDoc: docsByID.get('4')!,
+        docs: treeDocs,
+        docsByID,
+        dropTarget: {
+          dropType: 'row',
+          insertAfterDropID: 'page-insert:3',
+          insertBeforeDropID: 'page-insert:2',
+          rowID: '3',
+        },
+      }),
+    ).toEqual({
+      nextSiblingID: null,
+      parentID: '3',
+      previousSiblingID: null,
+    })
   })
 })

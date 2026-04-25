@@ -14,16 +14,23 @@ export function PageTreeTitleCell({
   children: React.ReactNode
   doc: PageTreeDoc
 }) {
-  const { activeDragRowID, canMoveDocs, collapsedIDs, pendingMoveRowID, toggleRow } =
-    usePageTree()
+  const {
+    activeDragRowID,
+    canMoveDocs,
+    collapsedIDs,
+    disableMoveDrag,
+    pendingMoveRowID,
+    toggleRow,
+  } = usePageTree()
   const depth = doc.__pageTreeDepth
   const hasChildren = doc.__pageTreeHasChildren
   const shadeLevel = Math.min(doc.__pageTreeShadeLevel, 6)
   const rowID = doc.__pageTreeID
   const isCollapsed = hasChildren && collapsedIDs.has(rowID)
-  const dragIsDisabled = !canMoveDocs || !rowID || pendingMoveRowID !== null
+  const dragIsDisabled = disableMoveDrag || !canMoveDocs || !rowID || pendingMoveRowID !== null
   const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
     data: {
+      dragType: 'move',
       rowID,
     },
     disabled: dragIsDisabled,

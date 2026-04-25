@@ -6,6 +6,7 @@ type PageTreeContextValue = {
   activeDragRowID: null | string
   canMoveDocs: boolean
   collapsedIDs: ReadonlySet<string>
+  disableMoveDrag?: boolean
   pendingMoveRowID: null | string
   toggleRow: (rowID: string) => void
 }
@@ -30,6 +31,7 @@ export function usePageTree(): PageTreeContextValue {
       activeDragRowID: null,
       canMoveDocs: false,
       collapsedIDs: new Set<string>(),
+      disableMoveDrag: false,
       pendingMoveRowID: null,
       toggleRow: () => {},
     }
