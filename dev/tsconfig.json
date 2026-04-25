@@ -19,13 +19,13 @@
       "@payload-config": [
         "./payload.config.ts"
       ],
-      "plugin-nested-docs-page-tree": [
+      "payload-nested-docs-page-tree": [
         "../src/index.ts"
       ],
-      "plugin-nested-docs-page-tree/client": [
+      "payload-nested-docs-page-tree/client": [
         "../src/exports/client.ts"
       ],
-      "plugin-nested-docs-page-tree/rsc": [
+      "payload-nested-docs-page-tree/rsc": [
         "../src/exports/rsc.ts"
       ]
     },

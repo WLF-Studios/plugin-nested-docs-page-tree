@@ -1,4 +1,4 @@
-# plugin-nested-docs-page-tree
+# Payload Nested Docs Page Tree
 
 Companion admin plugin for [`@payloadcms/plugin-nested-docs`](https://payloadcms.com/docs/plugins/nested-docs).
 
@@ -10,13 +10,13 @@ Adds a nested tree list view for nested docs collections in Payload admin, with 
 
 It works alongside `@payloadcms/plugin-nested-docs`. It does not replace nested docs persistence, breadcrumbs generation, or routing.
 
-Tested with Payload `3.81` and Next.js `16.2`.
+Tested with Payload `3.84.1` and Next.js `16.2`.
 
 
 ## Install
 
 ```bash
-pnpm add plugin-nested-docs-page-tree
+pnpm add payload-nested-docs-page-tree
 ```
 
 ## Quick Setup
@@ -31,7 +31,7 @@ Add `nestedDocsPageTreePlugin(...)` right after `nestedDocsPlugin(...)`:
 
 ```ts
 import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
-import { nestedDocsPageTreePlugin } from 'plugin-nested-docs-page-tree'
+import { nestedDocsPageTreePlugin } from 'payload-nested-docs-page-tree'
 
 export const plugins = [
   nestedDocsPlugin({
@@ -128,5 +128,5 @@ pnpm pack
 Then in the external consumer app:
 
 ```bash
-pnpm add /path/plugin-nested-docs-page-tree-*.tgz
+pnpm add /path/payload-nested-docs-page-tree-*.tgz
 ```

@@ -12,7 +12,7 @@ const DEFAULT_BREADCRUMBS_FIELD_SLUG = 'breadcrumbs'
 const DEFAULT_LIMIT = 100
 const DEFAULT_PARENT_FIELD_SLUG = 'parent'
 const PAGE_TREE_LIST_VIEW_PATH =
-  'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
+  'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
 type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], false>>[number]
 
 function getTopLevelField(
@@ -55,25 +55,25 @@ function validateTargetCollection(args: {
 
   if (typeof collection.admin?.useAsTitle !== 'string' || collection.admin.useAsTitle.includes('.')) {
     throw new Error(
-      `plugin-nested-docs-page-tree requires "${collection.slug}" to define a top-level admin.useAsTitle field.`,
+      `payload-nested-docs-page-tree requires "${collection.slug}" to define a top-level admin.useAsTitle field.`,
     )
   }
 
   if (!getTopLevelField(collection, collection.admin.useAsTitle)) {
     throw new Error(
-      `plugin-nested-docs-page-tree could not find the useAsTitle field "${collection.admin.useAsTitle}" on "${collection.slug}".`,
+      `payload-nested-docs-page-tree could not find the useAsTitle field "${collection.admin.useAsTitle}" on "${collection.slug}".`,
     )
   }
 
   if (!getTopLevelField(collection, parentFieldSlug)) {
     throw new Error(
-      `plugin-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs parent field "${parentFieldSlug}". Register @payloadcms/plugin-nested-docs before plugin-nested-docs-page-tree.`,
+      `payload-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs parent field "${parentFieldSlug}". Register @payloadcms/plugin-nested-docs before payload-nested-docs-page-tree.`,
     )
   }
 
   if (!getTopLevelField(collection, breadcrumbsFieldSlug)) {
     throw new Error(
-      `plugin-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs breadcrumbs field "${breadcrumbsFieldSlug}". Register @payloadcms/plugin-nested-docs before plugin-nested-docs-page-tree.`,
+      `payload-nested-docs-page-tree requires "${collection.slug}" to already define the nested docs breadcrumbs field "${breadcrumbsFieldSlug}". Register @payloadcms/plugin-nested-docs before payload-nested-docs-page-tree.`,
     )
   }
 
@@ -81,7 +81,7 @@ function validateTargetCollection(args: {
 
   if (existingListView && existingListView !== PAGE_TREE_LIST_VIEW_PATH) {
     throw new Error(
-      `plugin-nested-docs-page-tree cannot own the "${collection.slug}" list view because the collection already defines a custom admin.components.views.list.Component.`,
+      `payload-nested-docs-page-tree cannot own the "${collection.slug}" list view because the collection already defines a custom admin.components.views.list.Component.`,
     )
   }
 
@@ -91,7 +91,7 @@ function validateTargetCollection(args: {
 
   if (existingMoveEndpoint) {
     throw new Error(
-      `plugin-nested-docs-page-tree cannot add the move endpoint to "${collection.slug}" because the collection already defines POST /:id/move.`,
+      `payload-nested-docs-page-tree cannot add the move endpoint to "${collection.slug}" because the collection already defines POST /:id/move.`,
     )
   }
 }
@@ -125,7 +125,7 @@ export const nestedDocsPageTreePlugin =
   (pluginOptions: NestedDocsPageTreePluginConfig) =>
   (config: Config): Config => {
     if (!pluginOptions.collections?.length) {
-      throw new Error('plugin-nested-docs-page-tree requires at least one collection slug.')
+      throw new Error('payload-nested-docs-page-tree requires at least one collection slug.')
     }
 
     if (pluginOptions.disabled) {
@@ -141,7 +141,7 @@ export const nestedDocsPageTreePlugin =
     const targetedCollectionSlugs = new Set<string>(pluginOptions.collections)
 
     if (!config.collections?.length) {
-      throw new Error('plugin-nested-docs-page-tree could not find any collections to patch.')
+      throw new Error('payload-nested-docs-page-tree could not find any collections to patch.')
     }
 
     const foundCollectionSlugs = new Set<string>()
@@ -212,7 +212,7 @@ export const nestedDocsPageTreePlugin =
 
     if (missingCollections.length > 0) {
       throw new Error(
-        `plugin-nested-docs-page-tree could not find the following collections: ${missingCollections.join(', ')}`,
+        `payload-nested-docs-page-tree could not find the following collections: ${missingCollections.join(', ')}`,
       )
     }
 

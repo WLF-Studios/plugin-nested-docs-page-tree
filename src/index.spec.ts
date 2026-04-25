@@ -6,7 +6,7 @@ import { nestedDocsPageTreePlugin } from './index.js'
 
 type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], false>>[number]
 
-const pageTreeListViewPath = 'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
+const pageTreeListViewPath = 'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
 
 function buildCollection(args: {
   breadcrumbsFieldSlug?: string

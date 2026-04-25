@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { devUser } from './helpers/credentials.js'
 import { getRelationshipID } from '../src/utilities/pageTree.js'
 
-const pageTreeListViewPath = 'plugin-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
+const pageTreeListViewPath = 'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
 const pageSlugs = [
   'about',
   'blog',
