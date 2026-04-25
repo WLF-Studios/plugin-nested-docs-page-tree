@@ -85,6 +85,7 @@ type PageTreeDragData = {
 }
 type ReorderDirection = 'greater' | 'less'
 
+const MANUAL_ORDER_COLUMN_ACCESSOR = '_dragHandle'
 const SILENT_MOVE_MESSAGES = new Set([CANCEL_DRAG_MESSAGE])
 
 function getRowDropID(rowID: string): string {
@@ -277,7 +278,7 @@ function normalizePositiveInt(value: null | string, fallback: number): number {
 
 function normalizePageTreeColumnState(columnState: Column[], useAsTitle: string): Column[] {
   return columnState
-    .filter((column) => column.accessor !== '_dragHandle')
+    .filter((column) => column.accessor !== MANUAL_ORDER_COLUMN_ACCESSOR)
     .map((column) =>
       column.accessor === useAsTitle
         ? {
@@ -366,7 +367,7 @@ function renderStatusBadge(args: {
 
 function createManualOrderColumn(docs: PageTreeDoc[]): Column {
   return {
-    accessor: '_dragHandle',
+    accessor: MANUAL_ORDER_COLUMN_ACCESSOR,
     active: true,
     field: { hidden: true } as Column['field'],
     Heading: <SortHeader />,
@@ -462,7 +463,10 @@ function buildTableColumns(args: {
     })
   }
 
-  if (orderableFieldName && !columnsToUse.some((column) => column.accessor === '_dragHandle')) {
+  if (
+    orderableFieldName &&
+    !columnsToUse.some((column) => column.accessor === MANUAL_ORDER_COLUMN_ACCESSOR)
+  ) {
     return insertManualOrderColumn(columnsToUse, createManualOrderColumn(docs))
   }
 
@@ -516,6 +520,7 @@ function HierarchyTableRow({
   insertBeforeDropID,
   isMovePending,
   rowIndex,
+  titleCellAccessor,
 }: {
   activeColumns: Column[]
   activeDragRowID: null | string
@@ -525,6 +530,7 @@ function HierarchyTableRow({
   insertBeforeDropID: string
   isMovePending: boolean
   rowIndex: number
+  titleCellAccessor: string
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: getRowDropID(doc.__pageTreeID),
@@ -553,7 +559,14 @@ function HierarchyTableRow({
         const { accessor } = column
 
         return (
-          <td className={`cell-${accessor.replace(/\./g, '__')}`} key={columnIndex}>
+          <td
+            className={`cell-${accessor.replace(/\./g, '__')}`}
+            data-page-tree-manual-order-cell={
+              accessor === MANUAL_ORDER_COLUMN_ACCESSOR ? 'true' : undefined
+            }
+            data-page-tree-title-cell={accessor === titleCellAccessor ? 'true' : undefined}
+            key={columnIndex}
+          >
             {column.renderedCells?.[rowIndex] ?? null}
           </td>
         )
@@ -568,20 +581,24 @@ function HierarchyTable({
   allowSameParentDrops,
   columns,
   data,
-  hasManualOrderColumn,
   isMovePending,
+  titleCellAccessor,
 }: {
   activeDragRowID: null | string
   allDocsByID: ReadonlyMap<string, PageTreeDoc>
   allowSameParentDrops: boolean
   columns: Column[]
   data: PageTreeDoc[]
-  hasManualOrderColumn: boolean
   isMovePending: boolean
+  titleCellAccessor: string
 }) {
   const activeColumns = React.useMemo(
     () => columns.filter((column) => column?.active),
     [columns],
+  )
+  const hasManualOrderColumn = React.useMemo(
+    () => activeColumns.some((column) => column.accessor === MANUAL_ORDER_COLUMN_ACCESSOR),
+    [activeColumns],
   )
   const insertDropTargets = React.useMemo(() => buildInsertDropTargets(data), [data])
   const activeDoc = activeDragRowID ? allDocsByID.get(activeDragRowID) ?? null : null
@@ -640,7 +657,16 @@ function HierarchyTable({
           <thead>
             <tr>
               {activeColumns.map((column, index) => (
-                <th id={`heading-${column.accessor.replace(/\./g, '__')}`} key={index}>
+                <th
+                  data-page-tree-manual-order-cell={
+                    column.accessor === MANUAL_ORDER_COLUMN_ACCESSOR ? 'true' : undefined
+                  }
+                  data-page-tree-title-cell={
+                    column.accessor === titleCellAccessor ? 'true' : undefined
+                  }
+                  id={`heading-${column.accessor.replace(/\./g, '__')}`}
+                  key={index}
+                >
                   {column.Heading}
                 </th>
               ))}
@@ -668,6 +694,7 @@ function HierarchyTable({
                   insertBeforeDropID={insertDropTargets[rowIndex].dropID}
                   isMovePending={isMovePending}
                   rowIndex={rowIndex}
+                  titleCellAccessor={titleCellAccessor}
                 />
                 {insertDropTargets[rowIndex + 1] ? (
                   <HierarchyInsertRow
@@ -1288,8 +1315,8 @@ export default function PageTreeListViewClient({
           allowSameParentDrops={manualOrderIsActive}
           columns={tableColumns}
           data={paginatedDocs}
-          hasManualOrderColumn={Boolean(orderableFieldName)}
           isMovePending={isMovePending}
+          titleCellAccessor={useAsTitle}
         />
         <DragOverlay dropAnimation={null}>
           {activeDragPreviewPath ? (
@@ -1308,10 +1335,10 @@ export default function PageTreeListViewClient({
       isMovePending,
       allDocsByID,
       manualOrderIsActive,
-      orderableFieldName,
       paginatedDocs,
       sensors,
       tableColumns,
+      useAsTitle,
     ],
   )
 

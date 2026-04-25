@@ -55,8 +55,26 @@
   overflow-y: hidden;
 }
 
-.root :global(.pages-hierarchy-table[data-page-tree-orderable='true'] .cell-title) {
-  transform: translateX(-2.5rem);
+.root :global(.pages-hierarchy-table[data-page-tree-orderable='true'] [data-page-tree-manual-order-cell='true']) {
+  inline-size: 2rem;
+  min-inline-size: 2rem;
+  min-width: 2rem;
+  text-align: center;
+  width: 2rem;
+}
+
+.root :global(.pages-hierarchy-table[data-page-tree-orderable='true'] td[data-page-tree-manual-order-cell='true']) {
+  padding-inline: 0;
+}
+
+.root :global(.pages-hierarchy-table[data-page-tree-orderable='true'] th[data-page-tree-manual-order-cell='true'] .sort-header) {
+  inline-size: 100%;
+  justify-content: center;
+  min-inline-size: 0;
+}
+
+.root :global(.pages-hierarchy-table[data-page-tree-orderable='true'] td[data-page-tree-title-cell='true'] .pages-hierarchy-cell) {
+  margin-inline-start: -2rem;
 }
 
 .root :global(.pages-hierarchy-table .table tbody tr) {
