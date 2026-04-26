@@ -68,6 +68,7 @@ type PageTreeListViewClientOwnProps = {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
   canMoveDocs: boolean
   columnState: Column[]
+  homeIndicatorEnabled: boolean
   orderableFieldName?: string
   parentFieldSlug: string
   query: ListQuery
@@ -391,6 +392,7 @@ function buildTableColumns(args: {
   columnState: Column[]
   docs: PageTreeDoc[]
   enableRowSelections?: boolean
+  homeIndicatorEnabled: boolean
   orderableFieldName?: string
   parentFieldSlug: string
   t: (key: 'general:noValue' | 'version:changed' | 'version:draft' | 'version:published') => string
@@ -401,6 +403,7 @@ function buildTableColumns(args: {
     columnState,
     docs,
     enableRowSelections,
+    homeIndicatorEnabled,
     orderableFieldName,
     parentFieldSlug,
     t,
@@ -412,7 +415,11 @@ function buildTableColumns(args: {
         ...column,
         active: true,
         renderedCells: docs.map((doc, index) => (
-          <PageTreeTitleCell doc={doc} key={doc.__pageTreeID ?? index}>
+          <PageTreeTitleCell
+            doc={doc}
+            homeIndicatorEnabled={homeIndicatorEnabled}
+            key={doc.__pageTreeID ?? index}
+          >
             {column.renderedCells?.[index] ?? getDocDisplayLabel(doc)}
           </PageTreeTitleCell>
         )),
@@ -722,6 +729,7 @@ export default function PageTreeListViewClient({
   badgeConfig,
   canMoveDocs,
   columnState,
+  homeIndicatorEnabled,
   orderableFieldName,
   parentFieldSlug,
   query,
@@ -851,6 +859,7 @@ export default function PageTreeListViewClient({
         columnState: paginatedColumnState,
         docs: paginatedDocs,
         enableRowSelections: props.enableRowSelections,
+        homeIndicatorEnabled,
         orderableFieldName,
         parentFieldSlug,
         t: i18n.t,
@@ -860,6 +869,7 @@ export default function PageTreeListViewClient({
       paginatedColumnState,
       paginatedDocs,
       badgeConfig,
+      homeIndicatorEnabled,
       orderableFieldName,
       parentFieldSlug,
       props.enableRowSelections,

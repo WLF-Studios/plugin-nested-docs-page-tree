@@ -180,6 +180,9 @@ const buildConfigWithMemoryDB = async () => {
       }),
       nestedDocsPageTreePlugin({
         collections: ['page-tree-orderable', 'page-tree', 'categories'],
+        homeIndicator: {
+          collections: ['page-tree-orderable', 'page-tree'],
+        },
       }),
     ],
     secret: process.env.PAYLOAD_SECRET || 'test-secret_key',

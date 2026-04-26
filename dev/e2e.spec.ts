@@ -129,6 +129,10 @@ test('renders the seeded page tree with the expected columns and mixed statuses'
   const dataRows = page.locator(".pages-hierarchy-table tbody tr[data-page-tree-row='true']")
 
   await expect(dataRows).toHaveCount(14)
+  await expect(getPageTreeRow(page, 'Home').locator('.pages-hierarchy-cell')).toHaveAttribute(
+    'data-tree-home',
+    'true',
+  )
   await expect(dataRows.getByRole('link', { name: 'About', exact: true })).toHaveCount(1)
   await expect(dataRows.getByRole('link', { name: 'Leadership', exact: true })).toHaveCount(1)
   await expect(page.locator('.pages-hierarchy-status-badge--published').first()).toBeVisible()

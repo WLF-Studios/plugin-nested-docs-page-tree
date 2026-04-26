@@ -135,7 +135,7 @@ async function invokeMove(args: {
 
 function expectPageTreeCollection(
   collection: Payload['collections'][string]['config'],
-  options: { orderable: boolean },
+  options: { homeIndicatorEnabled: boolean; orderable: boolean },
 ) {
   expect(collection.admin.components?.views?.list?.Component).toBe(pageTreeListViewPath)
   expect(collection.orderable === true).toBe(options.orderable)
@@ -147,6 +147,9 @@ function expectPageTreeCollection(
     breadcrumbsFieldSlug: 'breadcrumbs',
     defaultLimit: 100,
     hideBreadcrumbs: true,
+    homeIndicator: {
+      enabled: options.homeIndicatorEnabled,
+    },
     parentFieldSlug: 'parent',
   })
 }
@@ -176,11 +179,20 @@ describe('nestedDocsPageTreePlugin integration', () => {
     const pagesCollection = payload.collections.pages.config
     const categoriesCollection = payload.collections.categories.config
 
-    expectPageTreeCollection(pageTreeOrderableCollection, { orderable: true })
-    expectPageTreeCollection(pageTreeCollection, { orderable: false })
+    expectPageTreeCollection(pageTreeOrderableCollection, {
+      homeIndicatorEnabled: true,
+      orderable: true,
+    })
+    expectPageTreeCollection(pageTreeCollection, {
+      homeIndicatorEnabled: true,
+      orderable: false,
+    })
     expectDefaultListCollection(pageOrderableCollection, { orderable: true })
     expectDefaultListCollection(pagesCollection, { orderable: false })
-    expectPageTreeCollection(categoriesCollection, { orderable: true })
+    expectPageTreeCollection(categoriesCollection, {
+      homeIndicatorEnabled: false,
+      orderable: true,
+    })
 
     expectMoveEndpoint(pageTreeOrderableCollection)
     expectMoveEndpoint(pageTreeCollection)

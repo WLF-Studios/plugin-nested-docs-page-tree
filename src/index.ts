@@ -9,6 +9,7 @@ import { nestedDocsPageTreePluginCustomKey } from './types.js'
 import { normalizeNestedDocsPageTreePluginBadgeConfig } from './utilities/badgeConfig.js'
 
 const DEFAULT_BREADCRUMBS_FIELD_SLUG = 'breadcrumbs'
+const DEFAULT_HOME_INDICATOR_COLLECTIONS = ['pages']
 const DEFAULT_LIMIT = 100
 const DEFAULT_PARENT_FIELD_SLUG = 'parent'
 const PAGE_TREE_LIST_VIEW_PATH =
@@ -101,17 +102,36 @@ function buildCollectionCustom(args: {
   breadcrumbsFieldSlug: string
   defaultLimit: number
   hideBreadcrumbs: boolean
+  homeIndicator: NestedDocsPageTreePluginCollectionCustom['homeIndicator']
   parentFieldSlug: string
 }): NestedDocsPageTreePluginCollectionCustom {
-  const { badges, breadcrumbsFieldSlug, defaultLimit, hideBreadcrumbs, parentFieldSlug } = args
+  const {
+    badges,
+    breadcrumbsFieldSlug,
+    defaultLimit,
+    hideBreadcrumbs,
+    homeIndicator,
+    parentFieldSlug,
+  } = args
 
   return {
     badges,
     breadcrumbsFieldSlug,
     defaultLimit,
     hideBreadcrumbs,
+    homeIndicator,
     parentFieldSlug,
   }
+}
+
+function getHomeIndicatorCollectionSlugs(
+  homeIndicator: NestedDocsPageTreePluginConfig['homeIndicator'],
+): Set<string> {
+  if (homeIndicator === false) {
+    return new Set()
+  }
+
+  return new Set(homeIndicator?.collections ?? DEFAULT_HOME_INDICATOR_COLLECTIONS)
 }
 
 export type {
@@ -119,6 +139,7 @@ export type {
   NestedDocsPageTreePluginBadgeMap,
   NestedDocsPageTreePluginBadgeStatus,
   NestedDocsPageTreePluginConfig,
+  NestedDocsPageTreePluginHomeIndicatorConfig,
 } from './types.js'
 
 export const nestedDocsPageTreePlugin =
@@ -138,6 +159,9 @@ export const nestedDocsPageTreePlugin =
     const hideBreadcrumbs = pluginOptions.hideBreadcrumbs ?? true
     const parentFieldSlug = pluginOptions.parentFieldSlug ?? DEFAULT_PARENT_FIELD_SLUG
     const badges = normalizeNestedDocsPageTreePluginBadgeConfig(pluginOptions.badges)
+    const homeIndicatorCollectionSlugs = getHomeIndicatorCollectionSlugs(
+      pluginOptions.homeIndicator,
+    )
     const targetedCollectionSlugs = new Set<string>(pluginOptions.collections)
 
     if (!config.collections?.length) {
@@ -186,6 +210,9 @@ export const nestedDocsPageTreePlugin =
             breadcrumbsFieldSlug,
             defaultLimit,
             hideBreadcrumbs,
+            homeIndicator: {
+              enabled: homeIndicatorCollectionSlugs.has(collection.slug),
+            },
             parentFieldSlug,
           }),
         },

@@ -54,7 +54,38 @@ payload generate:importmap
 - replaces the collection list view with a nested tree table
 - preserves sorting, filters, pagination, bulk selection, and row actions
 - adds `POST /:id/move` for drag-and-drop parent changes
+- marks the root page with slug `home` using a home icon on the title link
 - hides the read-only breadcrumbs field by default
+
+## Home Indicator
+
+By default, the home icon is enabled only for the `pages` collection.
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+})
+```
+
+For custom page collection slugs, pass an exact allow-list:
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['page-tree', 'categories'],
+  homeIndicator: {
+    collections: ['page-tree'],
+  },
+})
+```
+
+To disable the home icon everywhere:
+
+```ts
+nestedDocsPageTreePlugin({
+  collections: ['pages'],
+  homeIndicator: false,
+})
+```
 
 ## Status Badges
 
@@ -93,6 +124,7 @@ nestedDocsPageTreePlugin({
 - `breadcrumbsFieldSlug`: defaults to `'breadcrumbs'`
 - `defaultLimit`: defaults to `100`
 - `hideBreadcrumbs`: defaults to `true`
+- `homeIndicator`: defaults to `{ collections: ['pages'] }`; set to `false` to disable
 - `disabled`: defaults to `false`
 - `badges`: optional label and color overrides for `published`, `changed`, and `draft`
 

@@ -155,6 +155,9 @@ describe('nestedDocsPageTreePlugin', () => {
       breadcrumbsFieldSlug: 'breadcrumbs',
       defaultLimit: 50,
       hideBreadcrumbs: false,
+      homeIndicator: {
+        enabled: true,
+      },
       parentFieldSlug: 'parent',
     })
     expect(
@@ -164,6 +167,56 @@ describe('nestedDocsPageTreePlugin', () => {
     ).toBe(true)
     expect(getFieldHiddenValue(breadcrumbsField)).toBe(false)
     expect(untouchedPostsCollection?.admin?.components?.views?.list?.Component).toBeUndefined()
+  })
+
+  it('does not enable the home indicator for non-pages collections by default', () => {
+    const config = nestedDocsPageTreePlugin({
+      collections: ['categories'],
+    })(buildConfig([buildCollection({ slug: 'categories' })]))
+
+    expect(config.collections?.[0]?.custom?.nestedDocsPageTreePlugin).toMatchObject({
+      homeIndicator: {
+        enabled: false,
+      },
+    })
+  })
+
+  it('uses configured home indicator collections as an exact allow-list', () => {
+    const config = nestedDocsPageTreePlugin({
+      collections: ['pages', 'page-tree'],
+      homeIndicator: {
+        collections: ['page-tree'],
+      },
+    })(
+      buildConfig([
+        buildCollection({ slug: 'pages' }),
+        buildCollection({ slug: 'page-tree' }),
+      ]),
+    )
+
+    expect(config.collections?.[0]?.custom?.nestedDocsPageTreePlugin).toMatchObject({
+      homeIndicator: {
+        enabled: false,
+      },
+    })
+    expect(config.collections?.[1]?.custom?.nestedDocsPageTreePlugin).toMatchObject({
+      homeIndicator: {
+        enabled: true,
+      },
+    })
+  })
+
+  it('disables the home indicator everywhere when configured false', () => {
+    const config = nestedDocsPageTreePlugin({
+      collections: ['pages'],
+      homeIndicator: false,
+    })(buildConfig([buildCollection({ slug: 'pages' })]))
+
+    expect(config.collections?.[0]?.custom?.nestedDocsPageTreePlugin).toMatchObject({
+      homeIndicator: {
+        enabled: false,
+      },
+    })
   })
 
   it('preserves an existing pagination default limit on targeted collections', () => {

@@ -19,6 +19,10 @@ export function getCollectionPageTreeConfig(
     typeof config.breadcrumbsFieldSlug !== 'string' ||
     typeof config.defaultLimit !== 'number' ||
     typeof config.hideBreadcrumbs !== 'boolean' ||
+    !config.homeIndicator ||
+    typeof config.homeIndicator !== 'object' ||
+    Array.isArray(config.homeIndicator) ||
+    typeof config.homeIndicator.enabled !== 'boolean' ||
     typeof config.parentFieldSlug !== 'string'
   ) {
     return null
@@ -29,6 +33,9 @@ export function getCollectionPageTreeConfig(
     breadcrumbsFieldSlug: config.breadcrumbsFieldSlug,
     defaultLimit: config.defaultLimit,
     hideBreadcrumbs: config.hideBreadcrumbs,
+    homeIndicator: {
+      enabled: config.homeIndicator.enabled,
+    },
     parentFieldSlug: config.parentFieldSlug,
   }
 }
