@@ -296,10 +296,20 @@ function compareSortValues(leftValue: SortValue, rightValue: SortValue): number 
     return leftValue < rightValue ? -1 : 1
   }
 
-  return String(leftValue).localeCompare(String(rightValue), undefined, {
-    numeric: true,
-    sensitivity: 'base',
-  })
+  // Plain lexicographic comparison. Required for fractional-indexing keys (e.g. `_order`
+  // values like `a5`, `a53`, `a5i`), which encode position as raw lex order — using
+  // `localeCompare` with `numeric: true` would interpret digit runs as numbers and
+  // produce a different ordering than the database (e.g. `a53 > a5i` numerically vs
+  // `a53 < a5i` lexicographically). It also matches MongoDB's default string ordering,
+  // so children sort consistently between server-side and client-side.
+  const leftString = String(leftValue)
+  const rightString = String(rightValue)
+
+  if (leftString === rightString) {
+    return 0
+  }
+
+  return leftString < rightString ? -1 : 1
 }
 
 function createTreeNodeComparator(sort?: string) {

@@ -114,6 +114,23 @@ describe('buildPageTreeDocs', () => {
     expect(ordered).toHaveLength(3)
     expect(ordered.every((doc) => doc.__pageTreeDepth === 0)).toBe(true)
   })
+
+  it('sorts fractional-indexing keys lexicographically, not numerically', () => {
+    // Real-world case from the orderable plugin: keys like `a5`, `a53`, `a5i` must
+    // sort by raw lex order (a5 < a53 < a5i), matching the database. A numeric-aware
+    // comparator would treat the digit run "53" as the number 53 and place a53 after
+    // a5i (since 53 > 5), which is wrong.
+    const docs = buildDocs([
+      { _order: 'ab', id: 100, title: 'Services' },
+      { _order: 'a5', id: 101, parent: 100, title: 'Strategy' },
+      { _order: 'a53', id: 102, parent: 100, title: 'Company News' },
+      { _order: 'a5i', id: 103, parent: 100, title: 'Design' },
+    ])
+
+    expect(
+      buildPageTreeDocs(docs, { sort: '_order' }).map((doc) => doc.title),
+    ).toEqual(['Services', 'Strategy', 'Company News', 'Design'])
+  })
 })
 
 describe('getVisibleTreeDocs', () => {
