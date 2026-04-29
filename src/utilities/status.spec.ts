@@ -91,21 +91,16 @@ describe('getPageTreeBadgeColor', () => {
 })
 
 describe('withPageTreeDisplayStatuses', () => {
-  it('marks a draft with an existing published document as changed', () => {
+  it('marks a draft with an existing published version as changed', () => {
     expect(
       withPageTreeDisplayStatuses({
-        currentDocs: [
-          {
-            _status: 'published',
-            id: 'page-1',
-          },
-        ],
         draftDocs: [
           {
             _status: 'draft',
             id: 'page-1',
           },
         ],
+        publishedIDs: new Set(['page-1']),
       }),
     ).toMatchObject([
       {
@@ -116,27 +111,42 @@ describe('withPageTreeDisplayStatuses', () => {
     ])
   })
 
-  it('keeps unpublished drafts as draft', () => {
+  it('keeps drafts with no published version as draft', () => {
     expect(
       withPageTreeDisplayStatuses({
-        currentDocs: [
-          {
-            _status: 'draft',
-            id: 'page-2',
-          },
-        ],
         draftDocs: [
           {
             _status: 'draft',
             id: 'page-2',
           },
         ],
+        publishedIDs: new Set(),
       }),
     ).toMatchObject([
       {
         _displayStatus: 'draft',
         _status: 'draft',
         id: 'page-2',
+      },
+    ])
+  })
+
+  it('keeps a doc whose latest version is published as published even when listed as having a published version', () => {
+    expect(
+      withPageTreeDisplayStatuses({
+        draftDocs: [
+          {
+            _status: 'published',
+            id: 'page-3',
+          },
+        ],
+        publishedIDs: new Set(['page-3']),
+      }),
+    ).toMatchObject([
+      {
+        _displayStatus: 'published',
+        _status: 'published',
+        id: 'page-3',
       },
     ])
   })

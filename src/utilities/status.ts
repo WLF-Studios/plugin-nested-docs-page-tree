@@ -92,19 +92,16 @@ export function getPageTreeBadgeLabel(args: {
 }
 
 export function withPageTreeDisplayStatuses(args: {
-  currentDocs: Pick<PageTreeSourceDoc, '_status' | 'id'>[]
   draftDocs: PageTreeSourceDoc[]
+  publishedIDs: ReadonlySet<string>
 }): PageTreeSourceDoc[] {
-  const { currentDocs, draftDocs } = args
-  const currentStatusByID = new Map(
-    currentDocs.map((doc) => [String(doc.id ?? ''), doc._status ?? null]),
-  )
+  const { draftDocs, publishedIDs } = args
 
   return draftDocs.map((doc) => {
     const docID = String(doc.id ?? '')
-    const currentStatus = currentStatusByID.get(docID)
+    const hasPublishedVersion = publishedIDs.has(docID)
     const displayStatus =
-      doc._status === 'draft' && currentStatus === 'published'
+      doc._status === 'draft' && hasPublishedVersion
         ? 'changed'
         : doc._status === 'draft' || doc._status === 'published'
           ? doc._status

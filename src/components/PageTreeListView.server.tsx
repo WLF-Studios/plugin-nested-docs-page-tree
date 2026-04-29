@@ -271,12 +271,10 @@ async function getDocsWithDisplayStatus(args: {
   collectionConfig: ServerListViewProps['collectionConfig']
   collectionSlug: string
   docs: PageTreeSourceDoc[]
-  locale?: string
   payload: any
   req: any
-  user: unknown
 }): Promise<PageTreeSourceDoc[]> {
-  const { collectionConfig, collectionSlug, docs, locale, payload, req, user } = args
+  const { collectionConfig, collectionSlug, docs, payload, req } = args
 
   if (!collectionConfig.versions?.drafts || docs.length === 0) {
     return docs
@@ -290,28 +288,36 @@ async function getDocsWithDisplayStatus(args: {
     return docs
   }
 
-  const currentResult = await payload.find({
+  // The badge needs to know whether each doc has *any* published version, not what the
+  // main collection table currently holds. With autosave-enabled collections Payload
+  // writes draft data to the main row, so a draft `_status` there does NOT mean there
+  // is no published version — it just means the latest write was a draft. To match
+  // Payload's own logic in @payloadcms/ui's Status component, query the versions table
+  // directly and treat a doc as "changed" when a published version exists alongside a
+  // newer draft.
+  const publishedVersions = await payload.findVersions({
     collection: collectionSlug,
     depth: 0,
-    fallbackLocale: false,
-    locale,
+    limit: 0,
+    overrideAccess: true,
     pagination: false,
     req,
-    select: {
-      _status: true,
-      id: true,
-    },
-    user,
     where: {
-      id: {
-        in: docIDs,
-      },
+      and: [
+        { parent: { in: docIDs } },
+        { 'version._status': { equals: 'published' } },
+      ],
     },
   } as never)
+  const publishedIDs = new Set(
+    (publishedVersions.docs as Array<{ parent?: number | string }>).map((versionDoc) =>
+      String(versionDoc.parent ?? ''),
+    ),
+  )
 
   return withPageTreeDisplayStatuses({
-    currentDocs: currentResult.docs as Pick<PageTreeSourceDoc, '_status' | 'id'>[],
     draftDocs: docs,
+    publishedIDs,
   })
 }
 
@@ -424,10 +430,8 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     collectionConfig: props.collectionConfig,
     collectionSlug: props.collectionSlug,
     docs: fullResult.docs as unknown as PageTreeSourceDoc[],
-    locale,
     payload: props.payload,
     req,
-    user: props.user,
   })
 
   const orderedDocs = buildPageTreeDocs(treeSourceDocs, {
