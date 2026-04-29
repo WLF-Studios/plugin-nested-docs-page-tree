@@ -27,9 +27,11 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import React from 'react'
 
-import type {
-  NestedDocsPageTreePluginResolvedBadgeConfig,
-  PageTreeSourceDoc,
+import {
+  pageTreeMoveRequestHeader,
+  pageTreeMoveRequestHeaderValue,
+  type NestedDocsPageTreePluginResolvedBadgeConfig,
+  type PageTreeSourceDoc,
 } from '../types.js'
 
 import {
@@ -942,6 +944,7 @@ export default function PageTreeListViewClient({
           headers: {
             'Accept-Language': i18n.language,
             'Content-Type': 'application/json',
+            [pageTreeMoveRequestHeader]: pageTreeMoveRequestHeaderValue,
           },
           method: 'POST',
         },
@@ -996,6 +999,7 @@ export default function PageTreeListViewClient({
           headers: {
             'Accept-Language': i18n.language,
             'Content-Type': 'application/json',
+            [pageTreeMoveRequestHeader]: pageTreeMoveRequestHeaderValue,
           },
           method: 'POST',
         },

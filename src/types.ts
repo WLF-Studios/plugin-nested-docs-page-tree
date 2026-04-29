@@ -57,3 +57,13 @@ export type PageTreeSourceDoc = Record<string, unknown> & {
 }
 
 export const nestedDocsPageTreePluginCustomKey = 'nestedDocsPageTreePlugin'
+
+export const pageTreeMoveContextKey = 'pageTreeMove'
+
+export const pageTreeMoveRequestHeader = 'x-payload-nested-docs-page-tree-move'
+
+export const pageTreeMoveRequestHeaderValue = 'true'
+
+export type PageTreeMoveContext = {
+  [pageTreeMoveContextKey]?: boolean
+}

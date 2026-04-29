@@ -7,7 +7,7 @@ import {
   getDocParentID,
   stringifyDocID,
 } from '../utilities/pageTree.js'
-import type { PageTreeSourceDoc } from '../types.js'
+import { pageTreeMoveContextKey, type PageTreeSourceDoc } from '../types.js'
 
 type MoveDocumentRequestBody = {
   parentID: null | string
@@ -326,6 +326,9 @@ export function createMovePageEndpoint(args: {
 
       await req.payload.update({
         collection: collectionSlug as never,
+        context: {
+          [pageTreeMoveContextKey]: true,
+        },
         data: {
           [parentFieldSlug]:
             body.parentID === null

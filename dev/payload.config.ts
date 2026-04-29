@@ -9,6 +9,7 @@ import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
 import { testEmailAdapter } from './helpers/testEmailAdapter.js'
+import { revalidateOnDelete, revalidatePublishedChange } from './lib/rebuild.js'
 import { seed } from './seed.js'
 
 const filename = fileURLToPath(import.meta.url)
@@ -67,6 +68,10 @@ const buildPageLikeCollection = (args: {
     },
     slugField(),
   ],
+  hooks: {
+    afterChange: [revalidatePublishedChange(args.slug)],
+    afterDelete: [revalidateOnDelete(args.slug)],
+  },
   versions: {
     drafts: {
       autosave: {

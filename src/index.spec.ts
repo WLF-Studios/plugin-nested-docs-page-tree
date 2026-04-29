@@ -1,8 +1,13 @@
-import type { CollectionConfig, Config } from 'payload'
+import type { CollectionBeforeChangeHook, CollectionConfig, Config } from 'payload'
 
 import { describe, expect, it } from 'vitest'
 
 import { nestedDocsPageTreePlugin } from './index.js'
+import {
+  pageTreeMoveContextKey,
+  pageTreeMoveRequestHeader,
+  pageTreeMoveRequestHeaderValue,
+} from './types.js'
 
 type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], false>>[number]
 
@@ -14,6 +19,7 @@ function buildCollection(args: {
   endpointPath?: string
   includeBreadcrumbs?: boolean
   includeParent?: boolean
+  orderable?: boolean
   paginationDefaultLimit?: number
   parentFieldSlug?: string
   slug: string
@@ -25,6 +31,7 @@ function buildCollection(args: {
     endpointPath,
     includeBreadcrumbs = true,
     includeParent = true,
+    orderable = false,
     paginationDefaultLimit,
     parentFieldSlug = 'parent',
     slug,
@@ -87,6 +94,7 @@ function buildCollection(args: {
         ]
       : undefined,
     fields,
+    ...(orderable ? { orderable: true } : {}),
     slug,
   }
 }
@@ -233,6 +241,95 @@ describe('nestedDocsPageTreePlugin', () => {
     )
 
     expect(config.collections?.[0]?.admin?.pagination?.defaultLimit).toBe(25)
+  })
+
+  it('tags page-tree reorder requests with the move context before user hooks run', async () => {
+    let userHookSawMoveContext = false
+    const userBeforeChangeHook: CollectionBeforeChangeHook = ({ data, req }) => {
+      userHookSawMoveContext = req.context?.[pageTreeMoveContextKey] === true
+
+      return data
+    }
+    const config = nestedDocsPageTreePlugin({
+      collections: ['pages'],
+    })(
+      buildConfig([
+        {
+          ...buildCollection({
+            orderable: true,
+            slug: 'pages',
+          }),
+          hooks: {
+            beforeChange: [userBeforeChangeHook],
+          },
+        },
+      ]),
+    )
+    const hooks = config.collections?.[0]?.hooks?.beforeChange ?? []
+    const req = {
+      context: {},
+      headers: new Headers({
+        [pageTreeMoveRequestHeader]: pageTreeMoveRequestHeaderValue,
+      }),
+      user: { id: 'user-1' },
+    }
+    let data: Record<string, unknown> = {
+      title: 'About',
+    }
+
+    for (const hook of hooks) {
+      data = ((await hook({ data, req } as never)) ?? data) as Record<string, unknown>
+    }
+
+    expect(hooks).toHaveLength(2)
+    expect(req.context).toMatchObject({
+      [pageTreeMoveContextKey]: true,
+    })
+    expect(userHookSawMoveContext).toBe(true)
+  })
+
+  it('does not tag ordinary orderable updates as page-tree moves', async () => {
+    const config = nestedDocsPageTreePlugin({
+      collections: ['pages'],
+    })(buildConfig([buildCollection({ orderable: true, slug: 'pages' })]))
+    const hook = config.collections?.[0]?.hooks?.beforeChange?.[0]
+    const req = {
+      context: {},
+      headers: new Headers(),
+      user: { id: 'user-1' },
+    }
+
+    await hook?.({
+      data: {
+        title: 'About',
+      },
+      req,
+    } as never)
+
+    expect(req.context).not.toHaveProperty(pageTreeMoveContextKey)
+  })
+
+  it('does not tag the move context when the request has no authenticated user', async () => {
+    const config = nestedDocsPageTreePlugin({
+      collections: ['pages'],
+    })(buildConfig([buildCollection({ orderable: true, slug: 'pages' })]))
+    const hook = config.collections?.[0]?.hooks?.beforeChange?.[0]
+    const req = {
+      context: {},
+      headers: new Headers({
+        [pageTreeMoveRequestHeader]: pageTreeMoveRequestHeaderValue,
+      }),
+      user: null,
+    }
+
+    await hook?.({
+      data: {
+        title: 'About',
+      },
+      req,
+    } as never)
+
+    expect(req.context).not.toHaveProperty(pageTreeMoveContextKey)
   })
 
   it('returns the original config when the plugin is disabled', () => {

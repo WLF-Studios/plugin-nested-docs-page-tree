@@ -1,11 +1,16 @@
-import type { CollectionConfig, Config } from 'payload'
+import type { CollectionBeforeChangeHook, CollectionConfig, Config } from 'payload'
 
 import { createMovePageEndpoint } from './endpoints/createMovePageEndpoint.js'
 import type {
   NestedDocsPageTreePluginCollectionCustom,
   NestedDocsPageTreePluginConfig,
 } from './types.js'
-import { nestedDocsPageTreePluginCustomKey } from './types.js'
+import {
+  nestedDocsPageTreePluginCustomKey,
+  pageTreeMoveContextKey,
+  pageTreeMoveRequestHeader,
+  pageTreeMoveRequestHeaderValue,
+} from './types.js'
 import { normalizeNestedDocsPageTreePluginBadgeConfig } from './utilities/badgeConfig.js'
 
 const DEFAULT_BREADCRUMBS_FIELD_SLUG = 'breadcrumbs'
@@ -15,6 +20,30 @@ const DEFAULT_PARENT_FIELD_SLUG = 'parent'
 const PAGE_TREE_LIST_VIEW_PATH =
   'payload-nested-docs-page-tree/rsc#NestedDocsPageTreeListView'
 type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], false>>[number]
+
+// Page-tree owns parent moves, so those pass Local API context directly.
+// Reorders go through Payload's shared /api/reorder endpoint; this hook
+// bridges the plugin-owned request signal into the same hook context flag.
+// The bridge requires an authenticated request — the header alone is not a
+// trust boundary, but rejecting anonymous callers closes the only path that
+// could set the flag without already holding update access.
+const tagPageTreeMoveContextHook: CollectionBeforeChangeHook = ({ data, req }) => {
+  if (req.headers?.get(pageTreeMoveRequestHeader) !== pageTreeMoveRequestHeaderValue) {
+    return data
+  }
+
+  if (!req.user) {
+    return data
+  }
+
+  if (!req.context) {
+    req.context = {}
+  }
+
+  req.context[pageTreeMoveContextKey] = true
+
+  return data
+}
 
 function getTopLevelField(
   collection: Pick<CollectionConfig, 'fields'>,
@@ -140,7 +169,10 @@ export type {
   NestedDocsPageTreePluginBadgeStatus,
   NestedDocsPageTreePluginConfig,
   NestedDocsPageTreePluginHomeIndicatorConfig,
+  PageTreeMoveContext,
 } from './types.js'
+
+export { pageTreeMoveContextKey } from './types.js'
 
 export const nestedDocsPageTreePlugin =
   (pluginOptions: NestedDocsPageTreePluginConfig) =>
@@ -230,6 +262,15 @@ export const nestedDocsPageTreePlugin =
             hideBreadcrumbs,
           }),
         ),
+        hooks: collection.orderable
+          ? {
+              ...(collection.hooks ?? {}),
+              beforeChange: [
+                tagPageTreeMoveContextHook,
+                ...(collection.hooks?.beforeChange ?? []),
+              ],
+            }
+          : collection.hooks,
       }
     })
 
