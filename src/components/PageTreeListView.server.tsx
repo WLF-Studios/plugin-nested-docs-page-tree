@@ -9,6 +9,7 @@ import type {
 import React from 'react'
 import { getColumns, renderTable } from '@payloadcms/ui/rsc'
 import { getClientConfig } from '@payloadcms/ui/utilities/getClientConfig'
+import { headers } from 'next/headers.js'
 import { applyLocaleFiltering, combineWhereConstraints, mergeListSearchAndWhere } from 'payload/shared'
 
 import PageTreeListViewClient from './PageTreeListView.client.js'
@@ -387,6 +388,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
   }
   const locale = props.locale?.code
   const req = {
+    headers: await headers(),
     i18n: props.i18n,
     locale,
     payload: props.payload,
