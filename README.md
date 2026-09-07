@@ -109,7 +109,8 @@ Override any labels or colors with `badges`. Unspecified values use Payload defa
 
 ### Live and preview links
 
-<video controls src="assets/badge-link.mp4" title="Live and preview badge links" width="100%"></video>
+
+https://github.com/user-attachments/assets/e5fdb350-4740-4d80-9811-8c23deaf8701
 
 Enable `badgesLinks` as shown in [Setup](#setup).
 
