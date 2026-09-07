@@ -1,365 +1,276 @@
 # payload-nested-docs-page-tree
 
-Companion admin plugin for [`@payloadcms/plugin-nested-docs`](https://payloadcms.com/docs/plugins/nested-docs).
+Page management tools for Payload admin, built on [`@payloadcms/plugin-nested-docs`](https://payloadcms.com/docs/plugins/nested-docs).
 
-<p align="center">
-  <img alt="Page tree admin overview" src="assets/page-tree-admin-overview.png" width="100%" />
-</p>
+- **Page tree UI** with hierarchy and page URL paths.
+- **Intuitive drag and drop** to reorder siblings or move pages between parents.
+- **Status badges** for published pages, drafts, and drafts with unpublished changes.
+- **Live and preview links** from badges, with separate destinations for changed pages.
+- **Customizable badges** with label and color overrides for light and dark themes.
+- **Homepage icon** to identify the root `home` page.
+- **Publishing controls** to stage hierarchy changes or publish eligible moves immediately.
+- **Diagnostics mode** to trace moves, reorders, and published-state changes.
+- **Native list tools** including sorting, filters, pagination, bulk selection, and row actions.
 
-Adds a nested tree list view for nested docs collections in Payload admin, with visual hierarchy shading, live URL path previews, separate reorder and parent-move interactions, and status badges for published / changed / draft documents.
+**Coming soon:** custom badges for any cell.
 
-It works alongside `@payloadcms/plugin-nested-docs`. It does not replace nested docs persistence, breadcrumbs generation, or routing.
+[Page tree](#page-tree-ui) · [Drag and drop](#drag-and-drop) · [Badges](#badges) · [Live and preview links](#live-and-preview-links) · [Homepage icon](#homepage-icon) · [Diagnostics](#diagnostics) · [Full setup](#setup) · [Configuration](#configuration)
 
-Tested with Payload `3.81` and Next.js `16.2`.
+## Page tree UI
 
+![Page tree admin overview](assets/page-tree-admin-overview.png)
 
-## Install
+Browse nested pages while keeping Payload's sorting, filters, pagination, bulk selection, and row actions.
+
+### Visual hierarchy
+
+![Hierarchy UI](assets/visual-hierarchy.png)
+
+### Page URL paths
+
+![Page URL path preview](assets/live-url-path-preview.png)
+
+## Drag and drop
+
+### Reorder siblings
+
+https://github.com/user-attachments/assets/b25ffa1a-a6bd-45cf-bce8-56ba6cdf7e72
+
+Requires Payload `orderable` and sorting by its order field. Drag the reorder handle within the same parent or root level; only the order key changes.
+
+### Edit hierarchy
+
+https://github.com/user-attachments/assets/618d5e53-5918-40be-9932-0f516e5e82ba
+
+Enable **Edit Hierarchy** to move pages between parents using Payload's API and nested docs hooks.
+
+### Move to a parent
+
+https://github.com/user-attachments/assets/4cb25109-e515-4955-8503-39fddac0020f
+
+Drop a page onto another page to make it a child.
+
+### Move back to root
+
+https://github.com/user-attachments/assets/470cb5b3-61c8-4b5b-a6e4-5e855f58a0e4
+
+Drop between root pages to return a page to the root level.
+
+### Same-parent reorder guard
+
+https://github.com/user-attachments/assets/2513ff04-192e-4fdf-808f-6004f55d871c
+
+Reordering stays within the current parent. Use **Edit Hierarchy** to change parents.
+
+Moves are staged as drafts by default. Set `publishOnMove: true` to publish a move immediately **only when the page has no pending edits**. Collections without drafts always move live.
+
+<details>
+<summary>Publishing and locales</summary>
+
+### Publishing moves
+
+- Staged moves update the tree immediately; live paths change on publication.
+- With `publishOnMove: true`, pages with pending edits still stay staged. Publishing a move also republishes descendants so their live URLs follow the new parent.
+- On localized collections, the parent is shared but breadcrumbs are localized. Publishing a move updates breadcrumbs only in the active locale; other locales retain their previous URLs until published. Leave `publishOnMove` off if this does not suit your routing.
+
+</details>
+
+## Drag-And-Drop Is Triggering A Deploy?
+
+If your `afterChange` hook triggers external work—deploys, notifications, or search indexing—skip tree writes that leave the published site unchanged:
+
+```ts
+import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'
+
+// At the start of your afterChange hook:
+if (req.context?.[pageTreeMoveContextKey]) return
+```
+
+| Tree operation | Hook with this guard |
+| --- | --- |
+| Sibling reorder or staged move | Skipped |
+| Published move | Runs once for the subtree |
+
+The same guard works with or without `publishOnMove`. Without it, your hook may run on every drag, including staged changes. Hooks that only invalidate caches generally need no deploy guard.
+
+See [the playground deploy hook](dev/lib/rebuild.ts) for a complete example. The plugin provides `POST /:id/move` and `POST /:id/reorder` endpoints for these interactions.
+
+## Badges
+
+![Custom status badges](assets/custom-status-badges.png)
+
+| State | Meaning |
+| --- | --- |
+| `published` | Published and up to date |
+| `changed` | Draft with a published version |
+| `draft` | Not published |
+
+Override any labels or colors with `badges`. Unspecified values use Payload defaults; custom colors adapt to light and dark themes.
+
+### Live and preview links
+
+<video controls src="assets/badge-link.mp4" title="Live and preview badge links" width="100%"></video>
+
+Enable `badgesLinks` as shown in [Setup](#setup).
+
+Published badges open live; draft-only badges open preview. For drafts with a published version, choose:
+
+| Value | Behavior |
+| --- | --- |
+| `'live'` | Badge opens live |
+| `'preview'` | Badge opens preview |
+| `'both'` (default) | Body opens live; right-side icon opens preview |
+
+- **Live:** Uses the published document's last breadcrumb URL and `liveURL`. Breadcrumbs must match your frontend routes. Omit `liveURL` for preview links only.
+- **Preview:** Uses the collection's [`admin.preview`](https://payloadcms.com/docs/admin/preview) callback. Your frontend must serve draft content.
+
+All links open in new tabs. Omit `badgesLinks` to keep badges unlinked, even with preview configured.
+
+<details>
+<summary>URL resolution and unavailable links</summary>
+
+Live links use `breadcrumbsFieldSlug` and the published path, unaffected by draft slug or parent changes. Preview receives the latest saved draft, locale, request, and user token. Unsaved changes and `admin.livePreview.url` are not used.
+
+Missing breadcrumbs, missing or invalid URLs, or a failing preview callback disable only that link. In `'both'` mode, no live URL leaves the body as text; no preview URL hides the icon. Single-link modes never switch destinations. The selected mode is independent of the badge label.
+
+</details>
+
+## Homepage icon
+
+![Homepage icon](assets/homepage-icon.png)
+
+The homepage icon marks a **root page with slug `home`**. For custom collection slugs, use `homeIndicator: { collections: ['page-tree'] }`.
+
+## Diagnostics
+
+![Diagnostics logs](assets/diagnostics-mode-logs.png)
+
+Set `diagnostics: true` and reproduce the issue. Logs group related events by `flow` and show before/after changes to status, parent, order, and the published row. Diagnostics adds database reads; enable it while investigating.
+
+<details>
+<summary>Log fields and custom logger</summary>
+
+Events are tagged `[payload-nested-docs-page-tree]` and identify the move, reorder, or change-hook step. Key fields:
+
+- `flow`: shared ID for one operation.
+- `publishedMainRowBefore` / `publishedMainRowAfter`: published-row snapshots (`draft: false`).
+- `before` / `after` / `changed`: projected status, parent, and order diffs.
+
+A published row losing its `published` status produces a `page-tree-change:status-flip` warning.
+
+```ts
+diagnostics: {
+  enabled: true,
+  logger: (event) => console.log(event), // send to your preferred logger
+},
+```
+
+</details>
+
+## Setup
+
+Tested with Payload `3.81` and Next.js `16.2`. Requires `@payloadcms/plugin-nested-docs`, which continues to own persistence and breadcrumb generation; your frontend owns routing.
 
 ```bash
 pnpm add payload-nested-docs-page-tree
 ```
 
-## Quick Setup
-
-`@payloadcms/plugin-nested-docs` should already be installed, and each target collection should already have:
-
-- a nested docs parent field
-- a nested docs breadcrumbs field
-- a top-level `admin.useAsTitle` field
-
-These fields may live inside presentational containers — tabs, rows, collapsibles, and unnamed groups — because Payload still stores them at the top level of the document. Fields inside a **named** tab or **named** group are nested in the data and are not supported.
-
-Add `nestedDocsPageTreePlugin(...)` right after `nestedDocsPlugin(...)`:
+Register it **after** your existing nested docs plugin. This example shows every page-tree option, including optional badge styling and links:
 
 ```ts
 import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { nestedDocsPageTreePlugin } from 'payload-nested-docs-page-tree'
 
 export const plugins = [
-  nestedDocsPlugin({
-    // your existing nested docs config
+  nestedDocsPlugin({ // Register first; keep your existing nested docs options.
+    collections: ['pages'],
   }),
   nestedDocsPageTreePlugin({
-    collections: ['pages'],
+    collections: ['pages'], // Required: collections to show as a tree.
+    defaultLimit: 100, // Documents per list page.
+    hideBreadcrumbs: true, // False to show the read-only breadcrumbs field.
+    disabled: false, // True to disable the plugin.
+
+    homeIndicator: { collections: ['pages'] }, // Mark the root "home" page; false disables it.
+
+    badges: { // Omit to use Payload defaults.
+      labels: { // Override any status label.
+        published: 'Live',
+        changed: 'Has Changes', // A draft with a published version.
+        draft: 'Draft',
+      },
+      colors: { // Base colors adapt to light and dark themes.
+        published: '#bbf3b0',
+        changed: '#b9eaf3',
+        draft: '#f8d5a7',
+      },
+    },
+
+    badgesLinks: { // Omit to disable links; preview uses collection admin.preview.
+      draftHasPublishedVersion: 'both', // 'live' | 'preview' | 'both'
+      liveURL: 'https://www.example.com', // Base URL for the published breadcrumb path.
+    },
+
+    publishOnMove: false, // True publishes moves only for pages without pending edits.
+    diagnostics: false, // True to trace moves, reorders, and status changes.
   }),
 ]
 ```
 
+Only `collections` is required in the page-tree config. Omit `badges` for default styling and `badgesLinks` to disable links. Preview links require the collection's `admin.preview` callback.
+
+Each target collection needs parent, breadcrumbs, and `admin.useAsTitle` fields stored at the document's top level. Presentational tabs, rows, collapsibles, and unnamed groups are supported; fields inside named tabs or groups are not.
+
 Refresh the admin import map:
 
 ```bash
-payload generate:importmap
+pnpm exec payload generate:importmap
 ```
-
-## What It Adds
-
-- replaces the collection list view with a nested tree table
-- adds visual hierarchy shading for nested pages
-- shows the live URL path for each page
-- preserves sorting, filters, pagination, bulk selection, and row actions
-- adds `POST /:id/move` for intentional parent changes
-- adds `POST /:id/reorder` for orderable-only sibling reordering
-- keeps reorder drags scoped to the same parent or root level
-- marks the root page with slug `home` using a home icon on the title link
-- hides the read-only breadcrumbs field by default
-
-## Feature Preview
-
-### Visual hierarchy shading
-
-<p align="center">
-  <img alt="Visual hierarchy shading for nested pages" src="assets/visual-hierarchy-shading.png" width="100%" />
-</p>
-
-### Homepage icon
-
-<p align="center">
-  <img alt="Homepage icon in the page tree" src="assets/homepage-icon.png" width="100%" />
-</p>
-
-### Live URL path preview
-
-<p align="center">
-  <img alt="Live URL path preview in the page tree" src="assets/live-url-path-preview.png" width="100%" />
-</p>
-
-## Drag-And-Drop Modes
-
-Parent moves and orderable reordering are separate interactions.
-
-For collections using Payload `orderable`, the reorder handle is shown only when the current sort is the orderable field. Reordering only changes the order key and is limited to documents under the same parent, or documents at the root level. A reorder drag cannot change a document's parent.
-
-https://github.com/user-attachments/assets/b25ffa1a-a6bd-45cf-bce8-56ba6cdf7e72
-
-
-
-Parent moves are hidden by default because they change the page hierarchy. Editors can enable the parent-move handle with the `Edit Hierarchy` button when they intentionally want to move pages between parents. Drag a page onto another page to make it a child of that page. Drag it between root pages to move it back to the root level.
-
-Edit hierarchy mode
-
-https://github.com/user-attachments/assets/618d5e53-5918-40be-9932-0f516e5e82ba
-
-Parent move to child
-
-https://github.com/user-attachments/assets/4cb25109-e515-4955-8503-39fddac0020f
-
-Parent move back to root
-
-https://github.com/user-attachments/assets/470cb5b3-61c8-4b5b-a6e4-5e855f58a0e4
-
-Same-parent reorder guard
-
-https://github.com/user-attachments/assets/2513ff04-192e-4fdf-808f-6004f55d871c
-
-
-
-
-Internally, parent moves call this plugin's `/:id/move` endpoint. That endpoint updates the nested docs parent field through Payload's local API, while `@payloadcms/plugin-nested-docs` continues to own parent and breadcrumb behavior through its normal fields and hooks.
-
-### Publishing moves
-
-On a drafts-enabled collection a move is written through the drafts system, so by default it is staged as a **draft**: the tree updates immediately and the page shows a `changed` badge, but the live URL/path changes only when the page is next published. This is the safe default — publishing a move for a page that also has other pending edits would publish those edits too.
-
-Set `publishOnMove: true` to publish a move as soon as it happens — but only when it is safe to:
-
-```ts
-nestedDocsPageTreePlugin({
-  collections: ['pages'],
-  publishOnMove: true,
-})
-```
-
-With `publishOnMove` enabled, a move is published immediately **only if the moved page had no unpublished changes beforehand** (its latest version was already published). If the page has pending draft edits (a `changed` or draft-only page), the move stays staged exactly as before, so in-progress edits are never published as a side effect of a move. Collections without drafts always move live and are unaffected by this option.
-
-Publishing a move also republishes the moved page's descendants, so their live URLs follow the new parent. Since the live site really did change, a published move **does** trigger your deploy hook, once for the whole subtree - see [Deploy Hooks](#the-fix). Reorders and staged moves still do not. You do not need to change your hook when enabling this option.
-
-On a localized collection the parent field is shared across locales but breadcrumbs are not: publishing a move recomputes breadcrumbs only for the locale the move was made in, so other locales keep their previous URL until they are next published. If that matters for your setup, leave `publishOnMove` off.
-
-## Home Indicator
-
-By default, the home icon is enabled only for the `pages` collection.
-
-```ts
-nestedDocsPageTreePlugin({
-  collections: ['pages'],
-})
-```
-
-For custom page collection slugs, pass an exact allow-list:
-
-```ts
-nestedDocsPageTreePlugin({
-  collections: ['page-tree', 'categories'],
-  homeIndicator: {
-    collections: ['page-tree'],
-  },
-})
-```
-
-To disable the home icon everywhere:
-
-```ts
-nestedDocsPageTreePlugin({
-  collections: ['pages'],
-  homeIndicator: false,
-})
-```
-
-## Status Badges
-
-The tree view supports three document states:
-
-- `published`: live and up to date
-- `changed`: live, but has unpublished changes
-- `draft`: not published
-
-Badge colors use Payload theme colors by default. To override badge labels or status colors, pass a `badges` object. Custom colors are treated as one base color per status and are adapted for both light and dark Payload themes:
-
-<p align="center">
-  <img alt="Custom status badges in the page tree" src="assets/custom-status-badges.png" width="100%" />
-</p>
-
-```ts
-nestedDocsPageTreePlugin({
-  collections: ['pages'],
-  badges: {
-    colors: {
-      // Example: use a custom green / blue / orange palette.
-      published: '#bbf3b0',
-      changed: '#b9eaf3',
-      draft: '#f8d5a7',
-    },
-    labels: {
-      // Example: use custom labels for states.
-      published: 'Live',
-      changed: 'Has Changes',
-      draft: 'Draft Only',
-    },
-  },
-}),
-```
-
-`labels` and `colors` are optional partial overrides. Missing entries fall back to the built-in Payload-themed defaults for published, changed, and draft states.
 
 ## Configuration
 
-- `collections`: target collection slugs
-- `parentFieldSlug`: defaults to `'parent'`
-- `breadcrumbsFieldSlug`: defaults to `'breadcrumbs'`
-- `defaultLimit`: defaults to `100`
-- `hideBreadcrumbs`: defaults to `true`
-- `disabled`: defaults to `false`
-- `homeIndicator`: defaults to `{ collections: ['pages'] }`; set to `false` to disable
-- `publishOnMove`: defaults to `false`. When `true`, a move is published immediately if the moved page had no unpublished changes; pages with pending edits stay staged. See [Publishing moves](#publishing-moves).
-- `badges`: optional label and color overrides for `published`, `changed`, and `draft`
-- `diagnostics`: defaults to `false`. Enables structured diagnostic logging for tree-related publish/draft regressions; see below.
-
-## Diagnostics Mode
-
-If a page-tree move or reorder is doing something unexpected, enable diagnostics and reproduce. Each page-tree-triggered write emits one or more structured events on the dev server stdout:
-
-<p align="center">
-  <img alt="Diagnostics mode structured logs" src="assets/diagnostics-mode-logs.png" width="100%" />
-</p>
-
-```ts
-nestedDocsPageTreePlugin({
-  collections: ['pages'],
-  diagnostics: true,
-})
-```
-
-Or with a custom sink:
-
-```ts
-nestedDocsPageTreePlugin({
-  collections: ['pages'],
-  diagnostics: {
-    enabled: true,
-    logger: (event) => req.payload.logger.info({ pageTree: event }),
-  },
-})
-```
-
-Each event is one line tagged `[payload-nested-docs-page-tree]` followed by the event source (`move-endpoint:enter`, `move-endpoint:ok`, `move-endpoint:error`, `reorder-endpoint:enter`, `reorder-endpoint:ok`, `reorder-endpoint:error`, `page-tree-change:after`, `page-tree-change:status-flip`) and a JSON payload that includes:
-
-- `flow`: id shared by every event for one logical operation
-- `publishedMainRowBefore` / `publishedMainRowAfter`: fresh reads of the public/published row (`draft: false`)
-- `before` / `after` / `changed`: projected diffs for `_status`, the parent field, and the orderable field when present
-
-If the published main row goes from `published` to anything else as a result of a page-tree change, the plugin additionally emits a `page-tree-change:status-flip` WARN line.
-
-Diagnostics is opt-in and adds extra reads per operation. Leave it off in production unless you are actively investigating.
-
-## Drag-And-Drop Is Triggering A Deploy?
-
-A drag-and-drop parent move calls `payload.update()` on the draft only. The published version of the live site is never touched. So in most setups, dragging a page does not trigger any rebuild and you can skip this section.
-
-### When you can skip this section
-
-- The default Payload website template on Vercel (or any host using Next.js ISR), with drafts and autosave on. The template's `afterChange` hook only calls `revalidatePath` and `revalidateTag` from `next/cache`. Those just clear the edge cache. They do not trigger a Vercel build, do not consume build minutes, and do not change what visitors see when the published HTML has not changed.
-- Any setup where your `afterChange` hooks only do in-process cache work (`revalidatePath`, `revalidateTag`, in-memory caches, etc.).
-
-### When you need the one-line fix
-
-You need the fix if **you** wrote an `afterChange` hook that calls something external or expensive on every save. Common cases:
-
-- **Cloudflare Pages / Netlify / Vercel Deploy Hooks** (`fetch(DEPLOY_HOOK_URL)`) - these trigger full rebuilds and burn build minutes.
-- **GitHub Actions** `repository_dispatch` triggers.
-- **Manually-invoked SSG rebuilds**.
-- **Publish notifications** (email, Slack) on status transitions.
-- **Heavy search reindex jobs** (Algolia, Meilisearch full-document push).
-
-Why a tree move trips these: a typical deploy hook fires when `previousDoc?._status === 'published'` so that it catches unpublish events too. A tree move on a published doc can match that condition, but the live site has not actually changed. Without the fix, every drag can fire your deploy.
-
-### The fix
-
-Add one line at the top of your hook. The plugin sets a flag on Payload's [hook context](https://payloadcms.com/docs/hooks/context) for every page-tree write that leaves the live site unchanged, and your hook reads it to bail out early:
-
-```ts
-import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'
-
-// at the top of your afterChange hook:
-if (req.context?.[pageTreeMoveContextKey]) return
-```
-
-The rule is simply **rebuild when the live site changed**, so this one line stays correct in every configuration:
-
-| What the editor did in the tree | Live site changed? | Your deploy hook |
+| Option | Default | Purpose |
 | --- | --- | --- |
-| Reordered siblings | no - only the order key was written | does not fire |
-| Moved a page, default settings | no - the move is staged as a draft | does not fire |
-| Moved a page with [`publishOnMove`](#publishing-moves) on | yes - the page and its descendants have new URLs | fires once |
-
-Only the last row publishes anything, which is why it is the only row that rebuilds. It fires once for the whole subtree, not once per descendant. Enabling `publishOnMove` needs no change to your hook - the same line already does the right thing.
-
-To rebuild after **every** page-tree drag, including reorders, just leave the guard out. That also rebuilds on staged moves, which change nothing live.
-
-This goes in **your** hook - the one that calls the deploy webhook. Not in any of the template's stock files.
-
-Full example:
-
-```ts
-import type { CollectionAfterChangeHook } from 'payload'
-
-import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'
-
-export const triggerDeployOnPublishedChange: CollectionAfterChangeHook = async ({
-  doc,
-  previousDoc,
-  req,
-}) => {
-  // -- plugin opt-out --
-  if (req.context?.[pageTreeMoveContextKey]) return
-
-  // -- your deploy logic (example) --
-  // Fire on publish, republish, or unpublish - every transition the live site cares about.
-  if (doc._status === 'published' || previousDoc?._status === 'published') {
-    // POST to your Cloudflare / Netlify / Vercel deploy hook here
-  }
-}
-```
-
-See `dev/lib/rebuild.ts` for the full Cloudflare deploy hook example used by the dev playground.
+| `collections` | Required | Target collection slugs |
+| `parentFieldSlug` | `'parent'` | Nested docs parent field |
+| `breadcrumbsFieldSlug` | `'breadcrumbs'` | Nested docs breadcrumbs field |
+| `defaultLimit` | `100` | List page size |
+| `hideBreadcrumbs` | `true` | Hide the read-only breadcrumbs field |
+| `homeIndicator` | `{ collections: ['pages'] }` | Collections showing a home icon; `false` disables it |
+| `badges` | Payload defaults | Status label and color overrides |
+| `badgesLinks` | Disabled | Live and preview links |
+| `publishOnMove` | `false` | Publish moves for pages without pending edits |
+| `diagnostics` | `false` | Structured operation logs |
+| `disabled` | `false` | Disable the plugin |
 
 ## Development
 
-For local plugin development, use the internal `dev/` app:
+<details>
+<summary>Local playground, checks, and release validation</summary>
+
+Source lives in `src/`; the playground lives in `dev/`.
 
 ```bash
 pnpm install
 pnpm dev
-pnpm generate:types
-pnpm generate:importmap
 ```
 
-Open [http://localhost:3000/admin](http://localhost:3000/admin) and sign in with:
-
-- email: `admin@email.com`
-- password: `password`
-
-The dev app creates this user automatically on startup. After signing in, use the **seed the database** button on the dashboard to add the sample pages.
-
-Plugin source is in `src/`. The internal test app is in `dev/`.
-
-For checks:
+Open [localhost:3000/admin](http://localhost:3000/admin). The playground creates `admin@email.com` / `password` on startup. Use **seed the database** on the dashboard to add sample pages.
 
 ```bash
+pnpm generate:types
+pnpm generate:importmap
 pnpm test:int
 pnpm exec tsc --noEmit
 ```
 
-## Test in Another Project
-
-For release validation, test the packed artifact instead of a live source-folder dependency:
+For release validation, test the packed artifact in a consumer project:
 
 ```bash
 pnpm build
 pnpm pack
-```
-
-Then in the external consumer app:
-
-```bash
+# In the consumer project:
 pnpm add /path/payload-nested-docs-page-tree-*.tgz
 ```
+
+</details>
