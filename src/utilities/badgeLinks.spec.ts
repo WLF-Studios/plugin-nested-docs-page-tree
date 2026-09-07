@@ -1,25 +1,22 @@
-import type { PayloadRequest, SanitizedCollectionConfig } from 'payload'
-
 import { describe, expect, it, vi } from 'vitest'
 
+import type { BadgeLinkCollectionConfig } from './badgeLinks.js'
 import { resolvePageTreeBadgeLinks } from './badgeLinks.js'
 
 function fixture() {
   const req = {
-    headers: new Headers({ cookie: 'payload-token=test-token' }),
     locale: 'en',
     payload: {
-      config: { auth: { jwtOrder: ['cookie'] }, cookiePrefix: 'payload', csrf: [] },
       logger: { error: vi.fn() },
     },
     url: 'https://cms.example.com/admin/collections/pages',
-  } as unknown as PayloadRequest
-  const collectionConfig = {
+  }
+  const collectionConfig: BadgeLinkCollectionConfig<typeof req> = {
     slug: 'pages',
     admin: {
       preview: (doc: Record<string, unknown>) => `https://preview.example.com/${String(doc.slug)}`,
     },
-  } as SanitizedCollectionConfig
+  }
   return {
     collectionConfig,
     draftDoc: { id: 1, slug: 'new-path', _displayStatus: 'changed', _status: 'draft' },
@@ -32,6 +29,7 @@ function fixture() {
       breadcrumbs: [{ url: '/parent' }, { url: '/old-path' }],
     },
     req,
+    token: 'test-token',
   }
 }
 
@@ -156,9 +154,17 @@ describe('resolvePageTreeBadgeLinks', () => {
 
   it('does not fall back to live preview or invent missing destinations', async () => {
     const args = fixture()
-    args.collectionConfig.admin.preview = undefined
-    args.collectionConfig.admin.livePreview = { url: 'https://iframe.example.com' }
-    expect(await resolvePageTreeBadgeLinks({ ...args, badgesLinks: {} })).toEqual({})
+    const collectionConfig = {
+      ...args.collectionConfig,
+      admin: {
+        ...args.collectionConfig.admin,
+        livePreview: { url: 'https://iframe.example.com' },
+        preview: undefined,
+      },
+    }
+    expect(await resolvePageTreeBadgeLinks({ ...args, badgesLinks: {}, collectionConfig })).toEqual(
+      {},
+    )
   })
 
   it('retains both actions even when their destinations match', async () => {

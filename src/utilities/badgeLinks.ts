@@ -1,7 +1,3 @@
-import type { PayloadRequest, SanitizedCollectionConfig } from 'payload'
-
-import { extractJWT } from 'payload'
-
 import type {
   NestedDocsPageTreePluginBadgesLinks,
   PageTreeSourceDoc,
@@ -10,15 +6,37 @@ import type {
 
 import { getPageTreeDisplayStatus } from './status.js'
 
-export async function resolvePageTreeBadgeLinks(args: {
+export type BadgeLinkRequest = {
+  locale?: null | string
+  payload: {
+    logger: {
+      error(value: unknown): unknown
+    }
+  }
+  url?: string
+}
+
+export type BadgeLinkCollectionConfig<TRequest extends BadgeLinkRequest> = {
+  admin: {
+    preview?: (
+      doc: Record<string, unknown>,
+      options: { locale: string; req: TRequest; token: null | string },
+    ) => null | Promise<null | string> | string
+  }
+  slug: string
+}
+
+export async function resolvePageTreeBadgeLinks<TRequest extends BadgeLinkRequest>(args: {
   badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   breadcrumbsFieldSlug: string
-  collectionConfig: SanitizedCollectionConfig
+  collectionConfig: BadgeLinkCollectionConfig<TRequest>
   draftDoc: PageTreeSourceDoc
   publishedDoc?: PageTreeSourceDoc
-  req: PayloadRequest
+  req: TRequest
+  token: null | string
 }): Promise<PageTreeStatusLinks> {
-  const { badgesLinks, breadcrumbsFieldSlug, collectionConfig, draftDoc, publishedDoc, req } = args
+  const { badgesLinks, breadcrumbsFieldSlug, collectionConfig, draftDoc, publishedDoc, req, token } =
+    args
   if (!badgesLinks) {
     return {}
   }
@@ -66,7 +84,7 @@ export async function resolvePageTreeBadgeLinks(args: {
       preview(draftDoc, {
         locale: req.locale!,
         req,
-        token: extractJWT(req),
+        token,
       }),
     )
   }
