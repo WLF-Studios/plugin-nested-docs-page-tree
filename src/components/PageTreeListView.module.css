@@ -298,6 +298,69 @@
   color: var(--theme-success-800);
 }
 
+.root :global(a.pages-hierarchy-status-badge),
+.root :global(.pages-hierarchy-status-badge__body) {
+  text-decoration: none;
+}
+
+.root :global(a.pages-hierarchy-status-badge:hover),
+.root :global(a.pages-hierarchy-status-badge__body:hover) {
+  text-decoration: underline;
+}
+
+.root :global(.pages-hierarchy-status-badge--split) {
+  align-items: stretch;
+  padding: 0;
+}
+
+.root :global(.pages-hierarchy-status-badge__body) {
+  color: inherit;
+  align-items: center;
+  border-radius: 4px 0 0 4px;
+  display: inline-flex;
+  padding: 0.32rem 0.32rem 0.32rem 0.72rem;
+}
+
+.root :global(.pages-hierarchy-status-badge__preview) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-radius: 0 4px 4px 0;
+  color: inherit;
+  min-inline-size: 24px;
+  min-block-size: 20px;
+  padding: 0;
+  text-decoration: none;
+}
+
+.root :global(.pages-hierarchy-status-badge__preview .icon--externalLink) {
+  width: 12px;
+  height: 12px;
+}
+
+.root :global(a.pages-hierarchy-status-badge:hover),
+.root :global(.pages-hierarchy-status-badge__body:hover),
+.root :global(.pages-hierarchy-status-badge__preview:hover) {
+  background-image: linear-gradient(
+    color-mix(in srgb, currentColor 10%, transparent),
+    color-mix(in srgb, currentColor 10%, transparent)
+  );
+}
+
+.root :global(a.pages-hierarchy-status-badge:focus-visible),
+.root :global(.pages-hierarchy-status-badge__body:focus-visible),
+.root :global(.pages-hierarchy-status-badge__preview:focus-visible) {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .root :global(.pages-hierarchy-status-badge__preview) {
+    min-inline-size: 32px;
+  }
+}
+
 .root :global(.pages-hierarchy-status-badge--changed) {
   background: var(--theme-warning-150);
   color: var(--theme-warning-800);

@@ -3,6 +3,7 @@ import type { CollectionConfig, Config } from 'payload'
 import { describe, expect, it } from 'vitest'
 
 import { nestedDocsPageTreePlugin } from './index.js'
+import { getCollectionPageTreeConfig } from './utilities/pageTreeConfig.js'
 
 type CollectionEndpoint = NonNullable<Exclude<CollectionConfig['endpoints'], false>>[number]
 
@@ -164,6 +165,21 @@ function getFieldHiddenValue(field: CollectionConfig['fields'][number] | undefin
 }
 
 describe('nestedDocsPageTreePlugin', () => {
+  it('retains badge link options without replacing native preview', () => {
+    const pages = buildCollection({ slug: 'pages' })
+    const preview = () => 'https://preview.example.com'
+    pages.admin!.preview = preview
+    const badgesLinks = {
+      draftHasPublishedVersion: 'preview' as const,
+      liveURL: 'https://example.com',
+    }
+    const config = nestedDocsPageTreePlugin({ collections: ['pages'], badgesLinks })(
+      buildConfig([pages]),
+    )
+    const collection = config.collections![0]
+    expect(getCollectionPageTreeConfig(collection)?.badgesLinks).toEqual(badgesLinks)
+    expect(collection.admin?.preview).toBe(preview)
+  })
   it('patches targeted collections with the tree list view, endpoint, and custom config', () => {
     const pagesCollection = buildCollection({
       slug: 'pages',

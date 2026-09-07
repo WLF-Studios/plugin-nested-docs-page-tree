@@ -37,6 +37,11 @@ const Pages: CollectionConfig = {
   },
   admin: {
     defaultColumns: ['title', 'publishedAt', 'updatedAt', 'parent', 'slug', '_status'],
+    preview: (doc) => {
+      const slug = String(doc.slug ?? '')
+      return slug.includes('public-only')
+        ? null : `https://preview.example.com/${slug}`
+    },
     pagination: {
       defaultLimit: 100,
     },
@@ -156,7 +161,7 @@ const buildNestedDocURL = (docs: Array<Record<string, unknown>>): string =>
   }, '')
 
 const buildConfigWithMemoryDB = async () => {
-  if (process.env.NODE_ENV === 'test') {
+  if (process.env.NODE_ENV === 'test' || process.env.PAYLOAD_TEST_DATABASE === 'true') {
     const memoryDB = await MongoMemoryReplSet.create({
       replSet: {
         count: 1,
@@ -252,6 +257,10 @@ const buildConfigWithMemoryDB = async () => {
           },
         },
         collections: ['pages', 'tabbed-pages'],
+        badgesLinks: {
+          draftHasPublishedVersion: 'both',
+          liveURL: 'https://www.example.com',
+        },
         diagnostics: true,
       }),
       cloudflareBuildStatusPlugin(),

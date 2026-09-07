@@ -30,6 +30,7 @@ export function getCollectionPageTreeConfig(
 
   return {
     badges: normalizeNestedDocsPageTreePluginBadgeConfig(config.badges),
+    badgesLinks: config.badgesLinks,
     breadcrumbsFieldSlug: config.breadcrumbsFieldSlug,
     defaultLimit: config.defaultLimit,
     hideBreadcrumbs: config.hideBreadcrumbs,

@@ -6,17 +6,24 @@ import type {
   Params,
 } from 'payload'
 
-import React from 'react'
 import { getColumns, renderTable } from '@payloadcms/ui/rsc'
 import { getClientConfig } from '@payloadcms/ui/utilities/getClientConfig'
 import { headers } from 'next/headers.js'
-import { applyLocaleFiltering, combineWhereConstraints, mergeListSearchAndWhere } from 'payload/shared'
+import { createLocalReq } from 'payload'
+import {
+  applyLocaleFiltering,
+  combineWhereConstraints,
+  mergeListSearchAndWhere,
+} from 'payload/shared'
+import React from 'react'
 
-import PageTreeListViewClient from './PageTreeListView.client.js'
+import type { NestedDocsPageTreePluginBadgesLinks, PageTreeSourceDoc } from '../types.js'
+
+import { resolvePageTreeBadgeLinks } from '../utilities/badgeLinks.js'
 import { buildPageTreeDocs } from '../utilities/pageTree.js'
 import { getCollectionPageTreeConfig } from '../utilities/pageTreeConfig.js'
 import { withPageTreeDisplayStatuses } from '../utilities/status.js'
-import type { PageTreeSourceDoc } from '../types.js'
+import PageTreeListViewClient from './PageTreeListView.client.js'
 
 type ParsedQuery = Partial<ListQuery> & Record<string, unknown>
 type ServerListViewProps = Record<string, any>
@@ -273,6 +280,8 @@ function getBaseFilterArgs(
 }
 
 async function getDocsWithDisplayStatus(args: {
+  badgesLinks?: NestedDocsPageTreePluginBadgesLinks
+  breadcrumbsFieldSlug: string
   collectionConfig: ServerListViewProps['collectionConfig']
   collectionSlug: string
   docs: PageTreeSourceDoc[]
@@ -281,11 +290,17 @@ async function getDocsWithDisplayStatus(args: {
   req: any
   user: unknown
 }): Promise<PageTreeSourceDoc[]> {
-  const { collectionConfig, collectionSlug, docs, locale, payload, req, user } = args
-
-  if (!collectionConfig.versions?.drafts || docs.length === 0) {
-    return docs
-  }
+  const {
+    badgesLinks,
+    breadcrumbsFieldSlug,
+    collectionConfig,
+    collectionSlug,
+    docs,
+    locale,
+    payload,
+    req,
+    user,
+  } = args
 
   const docIDs = docs
     .map((doc) => doc.id)
@@ -295,29 +310,52 @@ async function getDocsWithDisplayStatus(args: {
     return docs
   }
 
-  const currentResult = await payload.find({
-    collection: collectionSlug,
-    depth: 0,
-    fallbackLocale: false,
-    locale,
-    pagination: false,
-    req,
-    select: {
-      _status: true,
-      id: true,
-    },
-    user,
-    where: {
-      id: {
-        in: docIDs,
-      },
-    },
-  } as never)
+  const currentResult = collectionConfig.versions?.drafts
+    ? await payload.find({
+        collection: collectionSlug,
+        depth: 0,
+        draft: false,
+        fallbackLocale: false,
+        locale,
+        overrideAccess: false,
+        pagination: false,
+        req,
+        select: {
+          id: true,
+          _status: true,
+          ...(badgesLinks?.liveURL ? { [breadcrumbsFieldSlug]: true } : {}),
+        },
+        user,
+        where: {
+          id: {
+            in: docIDs,
+          },
+        },
+      } as never)
+    : { docs }
 
-  return withPageTreeDisplayStatuses({
+  const currentByID = new Map<string, PageTreeSourceDoc>(
+    currentResult.docs.map((doc: PageTreeSourceDoc) => [String(doc.id), doc]),
+  )
+  const displayDocs = withPageTreeDisplayStatuses({
     currentDocs: currentResult.docs as Pick<PageTreeSourceDoc, '_status' | 'id'>[],
     draftDocs: docs,
   })
+  return Promise.all(
+    displayDocs.map(async (doc) => {
+      const cleanDoc = { ...doc }
+      delete cleanDoc.__pageTreeStatusLinks
+      const links = await resolvePageTreeBadgeLinks({
+        collectionConfig,
+        draftDoc: cleanDoc,
+        badgesLinks,
+        breadcrumbsFieldSlug,
+        publishedDoc: currentByID.get(String(doc.id)),
+        req,
+      })
+      return { ...cleanDoc, __pageTreeStatusLinks: links }
+    }),
+  )
 }
 
 async function getListClientConfig({
@@ -387,14 +425,32 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     sort: effectiveSort,
   }
   const locale = props.locale?.code
-  const req = {
-    headers: await headers(),
-    i18n: props.i18n,
-    locale,
-    payload: props.payload,
-    query: effectiveQuery,
-    user: props.user,
-  }
+  const requestHeaders = await headers()
+  const host =
+    requestHeaders.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+    requestHeaders.get('host') ||
+    'localhost'
+  const protocol =
+    requestHeaders.get('x-forwarded-proto')?.split(',')[0]?.trim() === 'https' ? 'https' : 'http'
+  const requestURL = new URL(props.payload.config.serverURL || `${protocol}://${host}`)
+  requestURL.pathname = `${props.payload.config.routes?.admin || '/admin'}/collections/${props.collectionSlug}`
+  const req = await createLocalReq(
+    {
+      fallbackLocale: false,
+      locale,
+      req: {
+        headers: requestHeaders,
+        i18n: props.i18n,
+        locale,
+        payload: props.payload,
+        query: effectiveQuery,
+        url: requestURL.href,
+        user: props.user,
+      },
+      user: props.user,
+    },
+    props.payload,
+  )
 
   const baseFilter =
     props.collectionConfig.admin?.baseFilter ?? props.collectionConfig.admin?.baseListFilter
@@ -418,6 +474,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     fallbackLocale: false,
     includeLockStatus: true,
     locale,
+    overrideAccess: false,
     pagination: false,
     req,
     sort: normalizeSort(query.sort) ?? defaultSort,
@@ -428,6 +485,8 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     collectionConfig: props.collectionConfig,
     collectionSlug: props.collectionSlug,
     docs: fullResult.docs as unknown as PageTreeSourceDoc[],
+    badgesLinks: pageTreeConfig.badgesLinks,
+    breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
     locale,
     payload: props.payload,
     req,
@@ -457,10 +516,12 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     req,
     user: props.user,
   })
-  const columnPreferences: ColumnPreference[] = (props.columnState as Array<{
-    accessor: string
-    active: boolean
-  }>).map(({ accessor, active }) => ({
+  const columnPreferences: ColumnPreference[] = (
+    props.columnState as Array<{
+      accessor: string
+      active: boolean
+    }>
+  ).map(({ accessor, active }) => ({
     accessor,
     active: accessor === props.collectionConfig.admin.useAsTitle ? true : active,
   }))
@@ -522,6 +583,7 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
       {...clientProps}
       allDocs={orderedDocs}
       badgeConfig={pageTreeConfig.badges}
+      badgesLinks={pageTreeConfig.badgesLinks}
       canMoveDocs={canMoveDocs}
       columnState={renderedTable.columnState}
       homeIndicatorEnabled={pageTreeConfig.homeIndicator.enabled}

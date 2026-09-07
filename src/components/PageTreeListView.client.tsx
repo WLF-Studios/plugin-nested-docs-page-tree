@@ -37,7 +37,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import React from 'react'
 import { createPortal } from 'react-dom'
 
-import type { NestedDocsPageTreePluginResolvedBadgeConfig, PageTreeSourceDoc } from '../types.js'
+import type {
+  NestedDocsPageTreePluginBadgesLinks,
+  NestedDocsPageTreePluginResolvedBadgeConfig,
+  PageTreeSourceDoc,
+} from '../types.js'
 
 import {
   buildInsertDropTargets,
@@ -58,12 +62,7 @@ import {
   type PageTreeDoc,
 } from '../utilities/pageTree.js'
 import { pageTreeCollisionDetectionStrategy } from '../utilities/pageTreeCollision.js'
-import {
-  getPageTreeBadgeColor,
-  getPageTreeBadgeLabel,
-  getPageTreeDisplayStatus,
-  type PageTreeDisplayStatus,
-} from '../utilities/status.js'
+import { PageTreeStatusBadge } from './PageTreeStatusBadge.js'
 import { PageTreeProvider, PageTreeRowDndProvider } from './PageTreeContext.js'
 import styles from './PageTreeListView.module.css'
 import { PageTreeTitleCell } from './PageTreeTitleCell.js'
@@ -71,6 +70,7 @@ import { PageTreeTitleCell } from './PageTreeTitleCell.js'
 type PageTreeListViewClientProps = {
   allDocs: PageTreeDoc[]
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
+  badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   canMoveDocs: boolean
   columnState: Column[]
   homeIndicatorEnabled: boolean
@@ -641,49 +641,21 @@ function getDropTargetValidation(args: {
   }
 }
 
-function getStatusClassName(
-  status: PageTreeDisplayStatus,
-): 'changed' | 'draft' | 'published' | 'unknown' {
-  if (status === 'changed' || status === 'draft' || status === 'published') {
-    return status
-  }
-
-  return 'unknown'
-}
-
 function renderStatusBadge(args: {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
+  badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   doc: PageTreeDoc
   index: number
   t: (key: 'general:noValue' | 'version:changed' | 'version:draft' | 'version:published') => string
 }): React.ReactNode {
-  const { badgeConfig, doc, index, t } = args
-  const status = getPageTreeDisplayStatus(doc)
-  const customColor = getPageTreeBadgeColor({
-    badgeColors: badgeConfig.colors,
-    status,
-  })
-  const statusClass = getStatusClassName(status)
-  const style = customColor
-    ? ({ '--page-tree-badge-base': customColor } as React.CSSProperties)
-    : undefined
-
+  const { badgeConfig, badgesLinks, doc, index } = args
   return (
-    <span
-      className={[
-        'pages-hierarchy-status-badge',
-        `pages-hierarchy-status-badge--${statusClass}`,
-      ].join(' ')}
-      data-custom-color={customColor ? 'true' : undefined}
+    <PageTreeStatusBadge
+      badgeConfig={badgeConfig}
+      badgesLinks={badgesLinks}
+      doc={doc}
       key={doc.__pageTreeID ?? index}
-      style={style}
-    >
-      {getPageTreeBadgeLabel({
-        badgeLabels: badgeConfig.labels,
-        status,
-        t,
-      })}
-    </span>
+    />
   )
 }
 
@@ -733,6 +705,7 @@ function ParentMoveToggle({
 
 function buildTableColumns(args: {
   badgeConfig: NestedDocsPageTreePluginResolvedBadgeConfig
+  badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   columnState: Column[]
   docs: PageTreeDoc[]
   enableRowSelections?: boolean
@@ -744,6 +717,7 @@ function buildTableColumns(args: {
 }): Column[] {
   const {
     badgeConfig,
+    badgesLinks,
     columnState,
     docs,
     enableRowSelections,
@@ -776,6 +750,7 @@ function buildTableColumns(args: {
         renderedCells: docs.map((doc, index) =>
           renderStatusBadge({
             badgeConfig,
+            badgesLinks,
             doc,
             index,
             t,
@@ -1153,6 +1128,7 @@ function HierarchyTable({
 export default function PageTreeListViewClient({
   allDocs,
   badgeConfig,
+  badgesLinks,
   canMoveDocs,
   columnState,
   homeIndicatorEnabled,
@@ -1329,6 +1305,7 @@ export default function PageTreeListViewClient({
     () =>
       buildTableColumns({
         badgeConfig,
+        badgesLinks,
         columnState: paginatedColumnState,
         docs: displayedPaginatedDocs,
         enableRowSelections: props.enableRowSelections,
@@ -1342,6 +1319,7 @@ export default function PageTreeListViewClient({
       paginatedColumnState,
       displayedPaginatedDocs,
       badgeConfig,
+      badgesLinks,
       homeIndicatorEnabled,
       orderableFieldName,
       parentFieldSlug,

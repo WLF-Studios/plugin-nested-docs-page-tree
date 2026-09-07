@@ -38,6 +38,8 @@ export type NestedDocsPageTreePluginResolvedHomeIndicatorConfig = {
 
 export type NestedDocsPageTreePluginConfig = {
   badges?: NestedDocsPageTreePluginBadgeConfig
+  /** Opt in to status badge links. Preview uses the collection's admin.preview. */
+  badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   breadcrumbsFieldSlug?: string
   collections: CollectionSlug[]
   defaultLimit?: number
@@ -70,6 +72,7 @@ export type NestedDocsPageTreePluginConfig = {
 
 export type NestedDocsPageTreePluginCollectionCustom = {
   badges: NestedDocsPageTreePluginResolvedBadgeConfig
+  badgesLinks?: NestedDocsPageTreePluginBadgesLinks
   breadcrumbsFieldSlug: string
   defaultLimit: number
   hideBreadcrumbs: boolean
@@ -77,7 +80,20 @@ export type NestedDocsPageTreePluginCollectionCustom = {
   parentFieldSlug: string
 }
 
+export type NestedDocsPageTreePluginBadgesLinks = {
+  /** Which links to offer for a draft with a published version. @default 'both' */
+  draftHasPublishedVersion?: 'both' | 'live' | 'preview'
+  /** Website base URL, resolved with the published document's last breadcrumb URL. */
+  liveURL?: string
+}
+
+export type PageTreeStatusLinks = {
+  previewURL?: string
+  publicURL?: string
+}
+
 export type PageTreeSourceDoc = Record<string, unknown> & {
+  __pageTreeStatusLinks?: PageTreeStatusLinks
   _displayStatus?: null | string
   _status?: null | string
   id?: number | string

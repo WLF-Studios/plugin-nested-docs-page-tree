@@ -52,9 +52,10 @@ function HomeIndicatorIcon() {
       xmlns="http://www.w3.org/2000/svg"
     >
       <path
-        d="M2.5 7L7 3L11.5 7V13.5H2.5V7Z"
+        d="M2.5 7L7 3L11.5 7V13.25H2.5V7Z"
         stroke="currentColor"
         strokeLinejoin="round"
+        strokeWidth="1.5"
       />
     </svg>
   )

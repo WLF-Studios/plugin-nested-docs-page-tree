@@ -209,6 +209,7 @@ function validateTargetCollection(args: {
 
 function buildCollectionCustom(args: {
   badges: NestedDocsPageTreePluginCollectionCustom['badges']
+  badgesLinks?: NestedDocsPageTreePluginConfig['badgesLinks']
   breadcrumbsFieldSlug: string
   defaultLimit: number
   hideBreadcrumbs: boolean
@@ -217,6 +218,7 @@ function buildCollectionCustom(args: {
 }): NestedDocsPageTreePluginCollectionCustom {
   const {
     badges,
+    badgesLinks,
     breadcrumbsFieldSlug,
     defaultLimit,
     hideBreadcrumbs,
@@ -226,6 +228,7 @@ function buildCollectionCustom(args: {
 
   return {
     badges,
+    badgesLinks,
     breadcrumbsFieldSlug,
     defaultLimit,
     hideBreadcrumbs,
@@ -247,6 +250,7 @@ function getHomeIndicatorCollectionSlugs(
 export type {
   NestedDocsPageTreePluginBadgeConfig,
   NestedDocsPageTreePluginBadgeMap,
+  NestedDocsPageTreePluginBadgesLinks,
   NestedDocsPageTreePluginBadgeStatus,
   NestedDocsPageTreePluginConfig,
   NestedDocsPageTreePluginHomeIndicatorConfig,
@@ -336,6 +340,7 @@ export const nestedDocsPageTreePlugin =
           ...(collection.custom ?? {}),
           [nestedDocsPageTreePluginCustomKey]: buildCollectionCustom({
             badges,
+            badgesLinks: pluginOptions.badgesLinks,
             breadcrumbsFieldSlug,
             defaultLimit,
             hideBreadcrumbs,
