@@ -35,8 +35,15 @@ export async function resolvePageTreeBadgeLinks<TRequest extends BadgeLinkReques
   req: TRequest
   token: null | string
 }): Promise<PageTreeStatusLinks> {
-  const { badgesLinks, breadcrumbsFieldSlug, collectionConfig, draftDoc, publishedDoc, req, token } =
-    args
+  const {
+    badgesLinks,
+    breadcrumbsFieldSlug,
+    collectionConfig,
+    draftDoc,
+    publishedDoc,
+    req,
+    token,
+  } = args
   if (!badgesLinks) {
     return {}
   }

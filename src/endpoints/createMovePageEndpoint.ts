@@ -1,9 +1,14 @@
 import type { Endpoint, PayloadRequest } from 'payload'
 
 import {
-  DIAGNOSTICS_FLOW_CONTEXT_KEY,
-  type Diagnostics,
+  pageTreeMoveContextKey,
+  type PageTreeSourceDoc,
+  pageTreeWriteContextKey,
+} from '../types.js'
+import {
   createFlowID,
+  type Diagnostics,
+  DIAGNOSTICS_FLOW_CONTEXT_KEY,
   readMainRowSnapshot,
 } from '../utilities/diagnostics.js'
 import { CANCEL_DRAG_MESSAGE } from '../utilities/moveValidation.js'
@@ -13,11 +18,6 @@ import {
   getDocParentID,
   stringifyDocID,
 } from '../utilities/pageTree.js'
-import {
-  pageTreeMoveContextKey,
-  type PageTreeSourceDoc,
-  pageTreeWriteContextKey,
-} from '../types.js'
 import {
   assertUpdateAccess,
   collectionHasAutosaveDrafts,
@@ -166,22 +166,22 @@ export function createMovePageEndpoint(args: {
       }
 
       const movedID = toCollectionID({
-        collectionSlug,
         id: movedIDFromRoute,
+        collectionSlug,
         req,
       })
       const nextParentID =
         body.parentID === null
           ? null
           : toCollectionID({
-              collectionSlug,
               id: body.parentID,
+              collectionSlug,
               req,
             })
       const accessError = await assertUpdateAccess({
+        id: movedID,
         collectionSlug,
         data: { [parentFieldSlug]: nextParentID },
-        id: movedID,
         req,
       })
 
@@ -190,15 +190,15 @@ export function createMovePageEndpoint(args: {
       }
 
       const docsResult = await req.payload.find({
-        collection: collectionSlug as never,
+        collection: collectionSlug,
         depth: 0,
         draft: collectionHasDrafts({ collectionSlug, req }) ? true : undefined,
-        fallbackLocale: false as never,
+        fallbackLocale: false,
         limit: 0,
-        locale: getRequestedLocale(req) as never,
+        locale: getRequestedLocale(req),
         overrideAccess: true,
         req,
-      } as never)
+      })
       const docs = docsResult.docs as unknown as PageTreeSourceDoc[]
       const docsByID = new Map(docs.map((doc) => [stringifyDocID(doc.id), doc]))
       const movedDoc = docsByID.get(movedIDFromRoute)
@@ -246,7 +246,7 @@ export function createMovePageEndpoint(args: {
       const hasDrafts = collectionHasDrafts({ collectionSlug, req })
       const hasAutosave = hasDrafts && collectionHasAutosaveDrafts({ collectionSlug, req })
       // With `publishOnMove`, publish the reparent right away instead of staging
-      // it — but ONLY when the moved doc had nothing staged before the move (its
+      // it - but ONLY when the moved doc had nothing staged before the move (its
       // latest version, read above with `draft: true`, is already published). A
       // doc with pending draft edits stays staged, so those in-progress edits are
       // never published as a side effect of the move.
@@ -256,14 +256,16 @@ export function createMovePageEndpoint(args: {
           body.parentID === null
             ? null
             : toCollectionID({
-                collectionSlug,
                 id: body.parentID,
+                collectionSlug,
                 req,
               }),
         ...(publishMove ? { _status: 'published' } : {}),
       }
       const updateArgs = {
-        collection: collectionSlug as never,
+        id: movedID,
+        autosave: hasAutosave && !publishMove ? true : undefined,
+        collection: collectionSlug,
         context: {
           // A published move changes the live URL of this page and of every
           // descendant nested-docs resaves on this request, so the deploy
@@ -272,12 +274,10 @@ export function createMovePageEndpoint(args: {
           ...(publishMove ? {} : { [pageTreeMoveContextKey]: true }),
           [pageTreeWriteContextKey]: true,
         } as Record<string, unknown>,
-        autosave: hasAutosave && !publishMove ? true : undefined,
-        data: updateData as never,
+        data: updateData,
         depth: 0,
         draft: hasDrafts && !publishMove ? true : undefined,
-        id: movedID as never,
-        locale: getRequestedLocale(req) as never,
+        locale: getRequestedLocale(req),
         overrideAccess: true,
         req,
       }
@@ -287,12 +287,12 @@ export function createMovePageEndpoint(args: {
           req.context = {}
         }
 
-        ;(req.context as Record<string, unknown>)[DIAGNOSTICS_FLOW_CONTEXT_KEY] = flow
+        req.context[DIAGNOSTICS_FLOW_CONTEXT_KEY] = flow
 
         const beforeSnapshot = await readMainRowSnapshot({
+          id: movedID,
           collectionSlug,
           fields: snapshotFields,
-          id: movedID,
           req,
         })
 
@@ -319,15 +319,15 @@ export function createMovePageEndpoint(args: {
       }
 
       try {
-        const result = (await req.payload.update(updateArgs as never)) as
-          | (Record<string, unknown> & { _status?: string })
+        const result = (await req.payload.update(updateArgs)) as
+          | ({ _status?: string } & Record<string, unknown>)
           | undefined
 
         if (diagnostics.enabled) {
           const afterSnapshot = await readMainRowSnapshot({
+            id: movedID,
             collectionSlug,
             fields: snapshotFields,
-            id: movedID,
             req,
           })
 
@@ -351,11 +351,11 @@ export function createMovePageEndpoint(args: {
         diagnostics.log({
           collection: collectionSlug,
           data: {
+            name: error?.name,
             data: error?.data ?? null,
             durMs: Date.now() - moveStart,
             message: error?.message,
             movedID: String(movedID),
-            name: error?.name,
           },
           flow,
           level: 'error',

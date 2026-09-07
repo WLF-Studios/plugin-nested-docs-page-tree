@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { BadgeLinkCollectionConfig } from './badgeLinks.js'
-import { resolvePageTreeBadgeLinks } from './badgeLinks.js'
+import { type BadgeLinkCollectionConfig, resolvePageTreeBadgeLinks } from './badgeLinks.js'
 
 function fixture() {
   const req = {
@@ -18,10 +17,10 @@ function fixture() {
     },
   }
   return {
-    collectionConfig,
-    draftDoc: { id: 1, slug: 'new-path', _displayStatus: 'changed', _status: 'draft' },
     badgesLinks: { liveURL: 'https://example.com' },
     breadcrumbsFieldSlug: 'breadcrumbs',
+    collectionConfig,
+    draftDoc: { id: 1, slug: 'new-path', _displayStatus: 'changed', _status: 'draft' },
     publishedDoc: {
       id: 1,
       slug: 'old-path',
@@ -49,8 +48,8 @@ describe('resolvePageTreeBadgeLinks', () => {
     [
       'both',
       {
-        publicURL: 'https://example.com/old-path',
         previewURL: 'https://preview.example.com/new-path',
+        publicURL: 'https://example.com/old-path',
       },
     ],
   ] as const)(

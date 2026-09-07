@@ -1,5 +1,6 @@
-import type { CollectionConfig, Config } from 'payload'
+import type { CollectionConfig, CollectionSlug, Config } from 'payload'
 
+import { mongooseAdapter } from '@payloadcms/db-mongodb'
 import { describe, expect, it } from 'vitest'
 
 import { nestedDocsPageTreePlugin } from './index.js'
@@ -40,7 +41,7 @@ function buildCollection(args: {
   orderable?: boolean
   paginationDefaultLimit?: number
   parentFieldSlug?: string
-  slug: string
+  slug: CollectionSlug
   useAsTitle?: string
   wrapFieldsIn?: FieldContainer
 }): CollectionConfig {
@@ -67,7 +68,7 @@ function buildCollection(args: {
   if (includeParent) {
     fields.push({
       name: parentFieldSlug,
-      relationTo: slug as never,
+      relationTo: slug,
       type: 'relationship',
     })
   }
@@ -107,7 +108,7 @@ function buildCollection(args: {
     endpoints: endpointPath
       ? [
           {
-            handler: (() => new Response(null, { status: 204 })) as never,
+            handler: () => new Response(null, { status: 204 }),
             method: 'post',
             path: endpointPath,
           },
@@ -122,12 +123,12 @@ function buildCollection(args: {
 function buildConfig(collections: CollectionConfig[]): Config {
   return {
     collections,
-  } as Config
+    db: mongooseAdapter({ url: 'mongodb://127.0.0.1/page-tree-plugin-tests' }),
+    secret: 'page-tree-plugin-test-secret',
+  }
 }
 
-function getCollectionEndpoints(
-  collection: CollectionConfig | undefined,
-): CollectionEndpoint[] {
+function getCollectionEndpoints(collection: CollectionConfig | undefined): CollectionEndpoint[] {
   return Array.isArray(collection?.endpoints) ? collection.endpoints : []
 }
 
@@ -156,7 +157,9 @@ function findFieldDeep(
   return undefined
 }
 
-function getFieldHiddenValue(field: CollectionConfig['fields'][number] | undefined): boolean | undefined {
+function getFieldHiddenValue(
+  field: CollectionConfig['fields'][number] | undefined,
+): boolean | undefined {
   if (!field || !('admin' in field)) {
     return undefined
   }
@@ -239,8 +242,8 @@ describe('nestedDocsPageTreePlugin', () => {
 
   it('does not enable the home indicator for non-pages collections by default', () => {
     const config = nestedDocsPageTreePlugin({
-      collections: ['categories' as never],
-    })(buildConfig([buildCollection({ slug: 'categories' })]))
+      collections: ['tabbed-pages'],
+    })(buildConfig([buildCollection({ slug: 'tabbed-pages' })]))
 
     expect(config.collections?.[0]?.custom?.nestedDocsPageTreePlugin).toMatchObject({
       homeIndicator: {
@@ -251,16 +254,11 @@ describe('nestedDocsPageTreePlugin', () => {
 
   it('uses configured home indicator collections as an exact allow-list', () => {
     const config = nestedDocsPageTreePlugin({
-      collections: ['pages', 'page-tree' as never],
+      collections: ['pages', 'tabbed-pages'],
       homeIndicator: {
-        collections: ['page-tree' as never],
+        collections: ['tabbed-pages'],
       },
-    })(
-      buildConfig([
-        buildCollection({ slug: 'pages' }),
-        buildCollection({ slug: 'page-tree' }),
-      ]),
-    )
+    })(buildConfig([buildCollection({ slug: 'pages' }), buildCollection({ slug: 'tabbed-pages' })]))
 
     expect(config.collections?.[0]?.custom?.nestedDocsPageTreePlugin).toMatchObject({
       homeIndicator: {

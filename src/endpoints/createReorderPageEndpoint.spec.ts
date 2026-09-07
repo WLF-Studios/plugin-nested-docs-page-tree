@@ -19,20 +19,19 @@ function makeReq(args?: {
   docs?: Record<string, unknown>[]
   latestDraftVersion?: Record<string, unknown>
   mainDoc?: Record<string, unknown>
-}): { req: PayloadRequest; updateCalls: Record<string, unknown>[]; versionUpdateCalls: Record<string, unknown>[] } {
+}) {
   const updateCalls: Record<string, unknown>[] = []
   const versionUpdateCalls: Record<string, unknown>[] = []
-  const body =
-    args?.body ??
-    {
-      docsToMove: ['abc'],
-      newKeyWillBe: 'greater',
-      orderableFieldName: '_order',
-      target: {
-        id: 'target-id',
-        key: 'a1',
-      },
-    }
+  const context: Record<string, unknown> = {}
+  const body = args?.body ?? {
+    docsToMove: ['abc'],
+    newKeyWillBe: 'greater',
+    orderableFieldName: '_order',
+    target: {
+      id: 'target-id',
+      key: 'a1',
+    },
+  }
   const collection = {
     config: args?.collectionConfig ?? { versions: undefined },
     customIDType: undefined,
@@ -49,13 +48,14 @@ function makeReq(args?: {
   })
 
   const req = {
-    context: {} as Record<string, unknown>,
+    context,
     data: body,
     headers: fakeRequest.headers,
-    i18n: { t: (key: string) => key } as PayloadRequest['i18n'],
+    i18n: { t: (key: string) => key },
     json: () => fakeRequest.clone().json(),
     payload: {
       collections: { pages: collection },
+      config: { custom: { allowPageMoves: true } },
       db: {
         defaultIDType: 'text',
         findVersions: vi.fn(() =>
@@ -78,17 +78,17 @@ function makeReq(args?: {
         if ('id' in (input.where ?? {})) {
           return Promise.resolve({
             docs,
+            totalDocs: docs.length,
           })
         }
 
         return Promise.resolve({ docs: [] })
       }),
-      findByID: vi.fn(() =>
-        Promise.resolve(mainDoc),
-      ),
+      findByID: vi.fn(() => Promise.resolve(mainDoc)),
       logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
       update: vi.fn(),
     },
+    query: { tenant: 'tenant-1' },
     routeParams: { id: 'abc' },
     text: () => fakeRequest.clone().text(),
     user: { id: 'tester' },
@@ -98,6 +98,40 @@ function makeReq(args?: {
 }
 
 describe('createReorderPageEndpoint', () => {
+
+  it.each(['request fields', 'pagination metadata'] as const)(
+    'supports collection access checks using %s',
+    async (check) => {
+      const endpoint = createReorderPageEndpoint({
+        collectionSlug: 'pages',
+        diagnostics: resolveDiagnostics(false),
+        orderableFieldName: '_order',
+        parentFieldSlug: 'parent',
+      })
+      const { req } = makeReq({
+        collectionConfig: {
+          access: {
+            update: async ({ req }: { req: PayloadRequest }) => {
+              if (check === 'request fields') {
+                return req.payload.config.custom?.allowPageMoves === true &&
+                  req.query.tenant === 'tenant-1'
+              }
+
+              const result = await req.payload.find({
+                collection: 'pages',
+                where: { id: { equals: 'abc' } },
+              })
+              return result.totalDocs > 0
+            },
+          },
+        },
+      })
+
+      const response = await endpoint.handler(req)
+
+      expect(response.status).toBe(200)
+    },
+  )
   it('updates the order key silently without using payload.update', async () => {
     const endpoint = createReorderPageEndpoint({
       collectionSlug: 'pages',

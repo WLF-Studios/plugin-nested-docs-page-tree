@@ -330,17 +330,17 @@ async function readBackendSiblingOrder(args: {
 
   try {
     const result = await req.payload.find({
-      collection: collectionSlug as never,
+      collection: collectionSlug,
       depth: 0,
-      draft: draft as never,
+      draft,
       limit: 250,
-      locale: locale as never,
+      locale,
       overrideAccess: true,
       pagination: false,
       req,
       sort: orderableFieldName,
-      where: parentScopeWhere as never,
-    } as never)
+      where: parentScopeWhere,
+    })
 
     return (result.docs as unknown as PageTreeSourceDoc[]).map((doc, index) =>
       getBackendOrderEntry({
@@ -396,7 +396,7 @@ async function readLatestVersion(args: {
 }): Promise<null | VersionRecord> {
   const { id, collectionSlug, req } = args
   const versions = await req.payload.db.findVersions({
-    collection: collectionSlug as never,
+    collection: collectionSlug,
     limit: 1,
     pagination: false,
     req,
@@ -409,7 +409,7 @@ async function readLatestVersion(args: {
         equals: id,
       },
     },
-  } as never)
+  })
   const latestVersion = versions.docs[0] as undefined | VersionRecord
 
   if (!latestVersion?.version) {
@@ -438,9 +438,9 @@ async function updateLatestVersionOrder(args: {
   }
 
   await req.payload.db.updateVersion({
-    id: latestVersion.id as never,
-    collection: collectionSlug as never,
-    locale: getRequestedLocale(req) as never,
+    id: latestVersion.id,
+    collection: collectionSlug,
+    locale: getRequestedLocale(req),
     req,
     returning: false,
     versionData: {
@@ -454,7 +454,7 @@ async function updateLatestVersionOrder(args: {
         [orderableFieldName]: orderValue,
       },
     },
-  } as never)
+  })
 
   return true
 }
@@ -470,16 +470,16 @@ async function updateOrderValueSilently(args: {
   const { id, collectionSlug, hasDrafts, orderableFieldName, orderValue, req } = args
 
   await req.payload.db.updateOne({
-    id: id as never,
-    collection: collectionSlug as never,
+    id,
+    collection: collectionSlug,
     data: {
       [orderableFieldName]: orderValue,
       updatedAt: null,
     },
-    locale: getRequestedLocale(req) as never,
+    locale: getRequestedLocale(req),
     req,
     returning: false,
-  } as never)
+  })
 
   const updatedDraftVersion = hasDrafts
     ? await updateLatestVersionOrder({
@@ -508,15 +508,15 @@ async function initializeMissingOrderKeys(args: {
   const { collectionSlug, diagnostics, flow, hasDrafts, orderableFieldName, parentScopeWhere, req } =
     args
   const existingOrderedDocs = await req.payload.find({
-    collection: collectionSlug as never,
+    collection: collectionSlug,
     depth: 0,
     draft: hasDrafts ? true : undefined,
     limit: 1,
-    locale: getRequestedLocale(req) as never,
+    locale: getRequestedLocale(req),
     overrideAccess: true,
     pagination: false,
     req,
-    select: { [orderableFieldName]: true } as never,
+    select: { [orderableFieldName]: true },
     sort: `-${orderableFieldName}`,
     where: combineWhereConstraints([
       {
@@ -525,18 +525,18 @@ async function initializeMissingOrderKeys(args: {
         },
       },
       parentScopeWhere,
-    ]) as never,
-  } as never)
+    ]),
+  })
   const missingOrderDocs = await req.payload.find({
-    collection: collectionSlug as never,
+    collection: collectionSlug,
     depth: 0,
     draft: hasDrafts ? true : undefined,
     limit: 0,
-    locale: getRequestedLocale(req) as never,
+    locale: getRequestedLocale(req),
     overrideAccess: true,
     pagination: false,
     req,
-    select: { [orderableFieldName]: true } as never,
+    select: { [orderableFieldName]: true },
     where: combineWhereConstraints([
       {
         [orderableFieldName]: {
@@ -544,8 +544,8 @@ async function initializeMissingOrderKeys(args: {
         },
       },
       parentScopeWhere,
-    ]) as never,
-  } as never)
+    ]),
+  })
   const lastOrderValue = getOrderableKey(
     existingOrderedDocs.docs[0] as unknown as PageTreeSourceDoc | undefined,
     orderableFieldName,
@@ -672,16 +672,16 @@ export function createReorderPageEndpoint(args: {
 
       // A reorder only writes the order key, never publishing state, so it
       // always carries the deploy opt-out flag.
-      ;(req.context as Record<string, unknown>)[pageTreeMoveContextKey] = true
-      ;(req.context as Record<string, unknown>)[pageTreeWriteContextKey] = true
-      ;(req.context as Record<string, unknown>)[DIAGNOSTICS_FLOW_CONTEXT_KEY] = flow
+      req.context[pageTreeMoveContextKey] = true
+      req.context[pageTreeWriteContextKey] = true
+      req.context[DIAGNOSTICS_FLOW_CONTEXT_KEY] = flow
 
       const relatedDocsResult = await req.payload.find({
-        collection: collectionSlug as never,
+        collection: collectionSlug,
         depth: 0,
         draft: hasDrafts ? true : undefined,
         limit: 2,
-        locale: getRequestedLocale(req) as never,
+        locale: getRequestedLocale(req),
         overrideAccess: true,
         req,
         where: {
@@ -689,7 +689,7 @@ export function createReorderPageEndpoint(args: {
             in: [movedID, targetID],
           },
         },
-      } as never)
+      })
       const docsByID = new Map(
         (relatedDocsResult.docs as unknown as PageTreeSourceDoc[]).map((doc) => [
           stringifyDocID(doc.id),
@@ -769,15 +769,15 @@ export function createReorderPageEndpoint(args: {
           })
         : null
       const adjacentDoc = await req.payload.find({
-        collection: collectionSlug as never,
+        collection: collectionSlug,
         depth: 0,
         draft: hasDrafts ? true : undefined,
         limit: 1,
-        locale: getRequestedLocale(req) as never,
+        locale: getRequestedLocale(req),
         overrideAccess: true,
         pagination: false,
         req,
-        select: { [orderableFieldName]: true } as never,
+        select: { [orderableFieldName]: true },
         sort: body.newKeyWillBe === 'greater' ? orderableFieldName : `-${orderableFieldName}`,
         where: combineWhereConstraints([
           {
@@ -786,8 +786,8 @@ export function createReorderPageEndpoint(args: {
             },
           },
           parentScopeWhere,
-        ]) as never,
-      } as never)
+        ]),
+      })
       const adjacentDocKey = getOrderableKey(
         adjacentDoc.docs[0] as unknown as PageTreeSourceDoc | undefined,
         orderableFieldName,

@@ -24,6 +24,7 @@
 .DS_Store
 *.pem
 *.tgz
+.pnpm-store/
 
 # debug
 npm-debug.log*

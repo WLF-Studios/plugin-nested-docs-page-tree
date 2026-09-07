@@ -9,7 +9,7 @@ import type {
 import { getColumns, renderTable } from '@payloadcms/ui/rsc'
 import { getClientConfig } from '@payloadcms/ui/utilities/getClientConfig'
 import { headers } from 'next/headers.js'
-import { createLocalReq } from 'payload'
+import { createLocalReq, extractJWT } from 'payload'
 import {
   applyLocaleFiltering,
   combineWhereConstraints,
@@ -341,17 +341,20 @@ async function getDocsWithDisplayStatus(args: {
     currentDocs: currentResult.docs as Pick<PageTreeSourceDoc, '_status' | 'id'>[],
     draftDocs: docs,
   })
+  const token = badgesLinks && collectionConfig.admin.preview ? extractJWT(req) : null
+
   return Promise.all(
     displayDocs.map(async (doc) => {
       const cleanDoc = { ...doc }
       delete cleanDoc.__pageTreeStatusLinks
       const links = await resolvePageTreeBadgeLinks({
-        collectionConfig,
-        draftDoc: cleanDoc,
         badgesLinks,
         breadcrumbsFieldSlug,
+        collectionConfig,
+        draftDoc: cleanDoc,
         publishedDoc: currentByID.get(String(doc.id)),
         req,
+        token,
       })
       return { ...cleanDoc, __pageTreeStatusLinks: links }
     }),
@@ -482,11 +485,11 @@ export async function NestedDocsPageTreeListView(props: ServerListViewProps) {
     where,
   } as never)
   const treeSourceDocs = await getDocsWithDisplayStatus({
+    badgesLinks: pageTreeConfig.badgesLinks,
+    breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
     collectionConfig: props.collectionConfig,
     collectionSlug: props.collectionSlug,
     docs: fullResult.docs as unknown as PageTreeSourceDoc[],
-    badgesLinks: pageTreeConfig.badgesLinks,
-    breadcrumbsFieldSlug: pageTreeConfig.breadcrumbsFieldSlug,
     locale,
     payload: props.payload,
     req,

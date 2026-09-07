@@ -133,11 +133,7 @@ async function createPage(args: {
   })
 }
 
-async function createPublishedPage(args: {
-  parent?: null | string
-  slug: string
-  title: string
-}) {
+async function createPublishedPage(args: { parent?: null | string; slug: string; title: string }) {
   const { parent = null, slug, title } = args
 
   return payload.create({
@@ -184,17 +180,15 @@ async function invokeMove(args: {
       method: 'POST',
     },
   )
-  const payloadRequest = (await createPayloadRequest({
+  const payloadRequest = await createPayloadRequest({
     config,
     request,
-  })) as PayloadRequest & {
-    routeParams?: Record<string, string>
-  }
+  })
 
   payloadRequest.routeParams = { id: String(movedID) }
 
   if (user) {
-    payloadRequest.user = user as never
+    payloadRequest.user = user
   }
 
   return moveEndpoint.handler(payloadRequest)
@@ -228,17 +222,15 @@ async function invokeReorder(args: {
       method: 'POST',
     },
   )
-  const payloadRequest = (await createPayloadRequest({
+  const payloadRequest = await createPayloadRequest({
     config,
     request,
-  })) as PayloadRequest & {
-    routeParams?: Record<string, string>
-  }
+  })
 
   payloadRequest.routeParams = { id: String(movedID) }
 
   if (user) {
-    payloadRequest.user = user as never
+    payloadRequest.user = user
   }
 
   return reorderEndpoint.handler(payloadRequest)
@@ -254,7 +246,7 @@ async function countPageVersions(id: number | string) {
         equals: id,
       },
     },
-  } as never)
+  })
 
   return versions.totalDocs
 }
@@ -308,7 +300,11 @@ describe('nestedDocsPageTreePlugin integration', () => {
       pagination: false,
     })
     const treeDocs = buildPageTreeDocs(
-      reseededResult.docs as unknown as Parameters<typeof buildPageTreeDocs>[0],
+      reseededResult.docs.map((doc) => ({
+        id: doc.id,
+        parent: doc.parent,
+        slug: doc.slug,
+      })),
     )
 
     expect(
@@ -413,20 +409,20 @@ describe('nestedDocsPageTreePlugin integration', () => {
     })
 
     const hook = revalidatePublishedChange('pages')
+    const payloadRequest = await createPayloadRequest({
+      config,
+      request: new Request('http://localhost:3000/api/pages/example?autosave=true'),
+    })
 
     await hook({
-      doc: { _status: 'published' },
-      previousDoc: { _status: 'draft' },
-      req: {
-        context: {},
-        payload: {
-          logger: {
-            error: vi.fn(),
-          },
-        },
-        url: 'http://localhost:3000/api/pages/example?autosave=true',
-      },
-    } as never)
+      collection: payload.collections.pages.config,
+      context: payloadRequest.context,
+      data: {},
+      doc: { id: 'example', _status: 'published' },
+      operation: 'update',
+      previousDoc: { id: 'example', _status: 'draft' },
+      req: payloadRequest,
+    })
 
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -719,7 +715,10 @@ describe('nestedDocsPageTreePlugin integration', () => {
 
     expect(getRelationshipID(teamEn.parent)).toBe(String(contact.id))
     expect(getRelationshipID(teamDe.parent)).toBe(String(contact.id))
-    expect(teamEn.breadcrumbs?.map((crumb) => crumb.label)).toEqual(['Contact Locale', 'Team Locale'])
+    expect(teamEn.breadcrumbs?.map((crumb) => crumb.label)).toEqual([
+      'Contact Locale',
+      'Team Locale',
+    ])
     expect(teamDe.breadcrumbs?.map((crumb) => crumb.label)).toEqual(teamDeBeforeBreadcrumbLabels)
   })
 

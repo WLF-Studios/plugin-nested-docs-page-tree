@@ -77,7 +77,7 @@ Moves are staged as drafts by default. Set `publishOnMove: true` to publish a mo
 
 ## Drag-And-Drop Is Triggering A Deploy?
 
-If your `afterChange` hook triggers external work—deploys, notifications, or search indexing—skip tree writes that leave the published site unchanged:
+If your `afterChange` hook triggers external work-deploys, notifications, or search indexing-skip tree writes that leave the published site unchanged:
 
 ```ts
 import { pageTreeMoveContextKey } from 'payload-nested-docs-page-tree'

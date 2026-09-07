@@ -4,13 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { NestedDocsPageTreePluginDiagnosticEvent } from '../types.js'
 
-import { resolveDiagnostics } from '../utilities/diagnostics.js'
 import { pageTreeMoveContextKey, pageTreeWriteContextKey } from '../types.js'
+import { resolveDiagnostics } from '../utilities/diagnostics.js'
 import { createMovePageEndpoint } from './createMovePageEndpoint.js'
 
 type CollectionConfig = {
   access?: { update?: unknown }
-  versions?: { drafts?: boolean | { autosave?: unknown } }
+  versions?: { drafts?: { autosave?: unknown } | boolean }
 }
 
 function makeReq(args?: {
@@ -19,7 +19,7 @@ function makeReq(args?: {
   defaultIDType?: 'number' | 'text'
   movedDocStatus?: 'draft' | 'published'
   updateShouldThrow?: boolean
-}): { calls: Record<string, unknown>[]; req: PayloadRequest } {
+}) {
   const calls: Record<string, unknown>[] = []
   const body = args?.body ?? { parentID: 'parent-id' }
   const movedDocStatus = args?.movedDocStatus ?? 'published'
@@ -34,32 +34,37 @@ function makeReq(args?: {
   })
 
   const req = {
-    context: {} as Record<string, unknown>,
+    context: {},
     data: body,
     headers: fakeRequest.headers,
-    i18n: { t: (key: string) => key } as PayloadRequest['i18n'],
+    i18n: { t: (key: string) => key },
     json: () => fakeRequest.clone().json(),
     payload: {
       collections: { pages: collection },
+      config: { custom: { allowPageMoves: true } },
       db: { defaultIDType: args?.defaultIDType ?? 'text' },
+      find: vi.fn(() =>
+        Promise.resolve({
+          docs: [
+            { id: 'abc', _status: movedDocStatus, parent: null },
+            { id: 'parent-id', _status: 'published', parent: null },
+          ],
+          totalDocs: 2,
+        }),
+      ),
+      findByID: vi.fn(() => Promise.resolve({ id: 'abc', _status: 'published', parent: null })),
       logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-      find: vi.fn(async () => ({
-        docs: [
-          { _status: movedDocStatus, id: 'abc', parent: null },
-          { _status: 'published', id: 'parent-id', parent: null },
-        ],
-      })),
-      findByID: vi.fn(async () => ({ _status: 'published', id: 'abc', parent: null })),
-      update: vi.fn(async (input: Record<string, unknown>) => {
+      update: vi.fn((input: Record<string, unknown>) => {
         calls.push(input)
 
         if (args?.updateShouldThrow) {
           throw new Error('update failed')
         }
 
-        return { _status: 'draft', id: 'abc' }
+        return Promise.resolve({ id: 'abc', _status: 'draft' })
       }),
     },
+    query: { tenant: 'tenant-1' },
     routeParams: { id: 'abc' },
     text: () => fakeRequest.clone().text(),
     user: { id: 'tester' },
@@ -69,6 +74,39 @@ function makeReq(args?: {
 }
 
 describe('createMovePageEndpoint diagnostics', () => {
+
+  it.each(['request fields', 'pagination metadata'] as const)(
+    'supports collection access checks using %s',
+    async (check) => {
+      const endpoint = createMovePageEndpoint({
+        collectionSlug: 'pages',
+        diagnostics: resolveDiagnostics(false),
+        parentFieldSlug: 'parent',
+      })
+      const { req } = makeReq({
+        collectionConfig: {
+          access: {
+            update: async ({ req }: { req: PayloadRequest }) => {
+              if (check === 'request fields') {
+                return req.payload.config.custom?.allowPageMoves === true &&
+                  req.query.tenant === 'tenant-1'
+              }
+
+              const result = await req.payload.find({
+                collection: 'pages',
+                where: { id: { equals: 'abc' } },
+              })
+              return result.totalDocs > 0
+            },
+          },
+        },
+      })
+
+      const response = await endpoint.handler(req)
+
+      expect(response.status).toBe(200)
+    },
+  )
   it('keeps diagnostics disabled without extra snapshot reads', async () => {
     const endpoint = createMovePageEndpoint({
       collectionSlug: 'pages',
@@ -160,13 +198,13 @@ describe('createMovePageEndpoint diagnostics', () => {
     expect(enterEvent?.flow.startsWith('move-endpoint-')).toBe(true)
     expect(enterEvent?.data.publishedMainRowBefore).toMatchObject({
       id: 'abc',
-      parent: null,
       _status: 'published',
+      parent: null,
     })
     expect(okEvent?.data.publishedMainRowAfter).toMatchObject({
       id: 'abc',
-      parent: null,
       _status: 'published',
+      parent: null,
     })
     expect(req.payload.findByID).toHaveBeenCalledTimes(2)
   })

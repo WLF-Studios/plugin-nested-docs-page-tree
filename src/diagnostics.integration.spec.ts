@@ -1,4 +1,4 @@
-import type { CollectionConfig, Endpoint, Payload, PayloadRequest } from 'payload'
+import type { CollectionConfig, Endpoint, Payload } from 'payload'
 
 import { mongooseAdapter } from '@payloadcms/db-mongodb'
 import { MongoMemoryReplSet } from 'mongodb-memory-server'
@@ -45,7 +45,7 @@ const Pages: CollectionConfig = {
   },
 }
 
-function getDocID(doc: Record<string, unknown>): number | string {
+function getDocID(doc: { id?: unknown }): number | string {
   if (typeof doc.id === 'number' || typeof doc.id === 'string') {
     return doc.id
   }
@@ -66,7 +66,7 @@ function getMoveEndpoint(): Endpoint {
   return endpoint
 }
 
-async function createPage(title: string): Promise<Record<string, unknown>> {
+async function createPage(title: string) {
   if (!payload) {
     throw new Error('Payload was not initialized.')
   }
@@ -76,10 +76,10 @@ async function createPage(title: string): Promise<Record<string, unknown>> {
     data: { title },
     disableTransaction: true,
     overrideAccess: true,
-  } as never) as unknown as Promise<Record<string, unknown>>
+  })
 }
 
-async function createPublishedPage(title: string): Promise<Record<string, unknown>> {
+async function createPublishedPage(title: string) {
   if (!payload) {
     throw new Error('Payload was not initialized.')
   }
@@ -90,13 +90,13 @@ async function createPublishedPage(title: string): Promise<Record<string, unknow
     disableTransaction: true,
     draft: false,
     overrideAccess: true,
-  } as never) as unknown as Promise<Record<string, unknown>>
+  })
 }
 
 async function invokePageTreeMove(args: {
   endpoint?: Endpoint
-  movedDoc: Record<string, unknown>
-  parentDoc: Record<string, unknown>
+  movedDoc: { id?: unknown }
+  parentDoc: { id?: unknown }
 }): Promise<Response> {
   const { endpoint, movedDoc, parentDoc } = args
   const movedID = getDocID(movedDoc)
@@ -106,12 +106,10 @@ async function invokePageTreeMove(args: {
     headers: { 'Content-Type': 'application/json' },
     method: 'POST',
   })
-  const payloadRequest = (await createPayloadRequest({
+  const payloadRequest = await createPayloadRequest({
     config: payloadConfig,
     request,
-  })) as PayloadRequest & {
-    routeParams?: Record<string, string>
-  }
+  })
 
   payloadRequest.routeParams = { id: String(movedID) }
 
@@ -181,29 +179,23 @@ describe('page-tree diagnostics integration', () => {
     },
   )
 
-  it(
-    'emits a page-tree-change:after event sharing the move flow id',
-    { retry: 3 },
-    async () => {
-      const movedDoc = await createPage('Diag chain move')
-      const parentDoc = await createPage('Diag chain parent')
+  it('emits a page-tree-change:after event sharing the move flow id', { retry: 3 }, async () => {
+    const movedDoc = await createPage('Diag chain move')
+    const parentDoc = await createPage('Diag chain parent')
 
-      collectedEvents = []
+    collectedEvents = []
 
-      await invokePageTreeMove({ movedDoc, parentDoc })
+    await invokePageTreeMove({ movedDoc, parentDoc })
 
-      const enterEvent = collectedEvents.find((event) => event.source === 'move-endpoint:enter')
-      const changeEvent = collectedEvents.find(
-        (event) => event.source === 'page-tree-change:after',
-      )
+    const enterEvent = collectedEvents.find((event) => event.source === 'move-endpoint:enter')
+    const changeEvent = collectedEvents.find((event) => event.source === 'page-tree-change:after')
 
-      expect(enterEvent).toBeDefined()
-      expect(changeEvent).toBeDefined()
-      expect(changeEvent?.flow).toBe(enterEvent?.flow)
-      expect(changeEvent?.data.docID).toBe(String(getDocID(movedDoc)))
-      expect(Array.isArray(changeEvent?.data.changed)).toBe(true)
-    },
-  )
+    expect(enterEvent).toBeDefined()
+    expect(changeEvent).toBeDefined()
+    expect(changeEvent?.flow).toBe(enterEvent?.flow)
+    expect(changeEvent?.data.docID).toBe(String(getDocID(movedDoc)))
+    expect(Array.isArray(changeEvent?.data.changed)).toBe(true)
+  })
 
   it(
     'still emits page-tree-change events when publishOnMove publishes the move',
@@ -264,10 +256,10 @@ describe('page-tree diagnostics integration', () => {
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     })
-    const payloadRequest = (await createPayloadRequest({
+    const payloadRequest = await createPayloadRequest({
       config: payloadConfig,
       request,
-    })) as PayloadRequest & { routeParams?: Record<string, string> }
+    })
 
     payloadRequest.routeParams = { id: String(movedID) }
 

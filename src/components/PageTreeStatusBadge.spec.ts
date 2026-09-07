@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { PageTreeStatusBadge } from './PageTreeStatusBadge.js'
 
 vi.mock('@payloadcms/ui', () => ({
-  ExternalLinkIcon: () => null,
+  ExternalLinkIcon: () =>
+    React.createElement('svg', { 'data-page-tree-test-icon': 'external-link' }),
   useTranslation: () => ({ t: (key: string) => key }),
 }))
 
@@ -32,6 +33,7 @@ describe('PageTreeStatusBadge', () => {
       expect(html.match(/<a /g)?.length).toBe(mode === 'both' ? 2 : 1)
       expect(html.includes('href="https://example.com/live"')).toBe(mode !== 'preview')
       expect(html.includes('href="https://example.com/preview"')).toBe(mode !== 'live')
+      expect(html.includes('data-page-tree-test-icon="external-link"')).toBe(mode === 'both')
       if (mode === 'preview') expect(html).toContain('>Custom label</a>')
     },
   )

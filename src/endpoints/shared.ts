@@ -1,26 +1,6 @@
-import type { PayloadRequest, Where } from 'payload'
+import type { PayloadRequest } from 'payload'
 
 import { stringifyDocID } from '../utilities/pageTree.js'
-
-export type PayloadCollectionLike = {
-  config?: {
-    access?: {
-      update?:
-        | ((
-            args: Record<string, unknown>,
-          ) => boolean | Promise<boolean | Record<string, unknown>> | Record<string, unknown>)
-        | undefined
-    }
-    versions?: {
-      drafts?:
-        | {
-            autosave?: boolean | Record<string, unknown>
-          }
-        | boolean
-    }
-  }
-  customIDType?: string
-}
 
 export function getPayloadCollection({
   collectionSlug,
@@ -28,10 +8,8 @@ export function getPayloadCollection({
 }: {
   collectionSlug: string
   req: PayloadRequest
-}): PayloadCollectionLike | undefined {
-  return (req.payload.collections as unknown as Record<string, PayloadCollectionLike | undefined>)[
-    collectionSlug
-  ]
+}) {
+  return req.payload.collections[collectionSlug]
 }
 
 export function getRequestedLocale(req: PayloadRequest): string | undefined {
@@ -51,11 +29,7 @@ export function collectionHasAutosaveDrafts(args: {
 }): boolean {
   const drafts = getPayloadCollection(args)?.config?.versions?.drafts
 
-  if (!drafts || drafts === true) {
-    return false
-  }
-
-  return Boolean(drafts.autosave)
+  return Boolean(drafts && drafts.autosave)
 }
 
 export function normalizeID(value: unknown): null | string {
@@ -101,8 +75,8 @@ export async function assertUpdateAccess(args: {
   }
 
   const accessResult = await updateAccess({
-    id: id as never,
-    data: data as never,
+    id,
+    data,
     req,
   })
 
@@ -114,11 +88,11 @@ export async function assertUpdateAccess(args: {
 
   if (accessResult && typeof accessResult === 'object') {
     const matchingDocs = await req.payload.find({
-      collection: collectionSlug as never,
+      collection: collectionSlug,
       depth: 0,
       draft: collectionHasDrafts({ collectionSlug, req }) ? true : undefined,
       limit: 1,
-      locale: getRequestedLocale(req) as never,
+      locale: getRequestedLocale(req),
       overrideAccess: true,
       req,
       where: {
@@ -128,10 +102,10 @@ export async function assertUpdateAccess(args: {
               equals: id,
             },
           },
-          accessResult as Where,
+          accessResult,
         ],
-      } as never,
-    } as never)
+      },
+    })
 
     if (matchingDocs.docs.length === 0) {
       return respond(403, {

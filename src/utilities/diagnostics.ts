@@ -112,14 +112,14 @@ export async function readMainRowSnapshot(args: {
 
   try {
     const doc = (await req.payload.findByID({
-      id: id as never,
-      collection: collectionSlug as never,
+      id,
+      collection: collectionSlug,
       depth: 0,
       disableErrors: true,
       draft: false,
       overrideAccess: true,
       req,
-    } as never)) as unknown as null | Record<string, unknown>
+    })) as unknown as null | Record<string, unknown>
 
     if (!doc) {
       return null

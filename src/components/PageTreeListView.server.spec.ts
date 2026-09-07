@@ -1,18 +1,29 @@
 import type { PayloadRequest } from 'payload'
 
-import { getColumns, renderTable } from '@payloadcms/ui/rsc'
-import { getClientConfig } from '@payloadcms/ui/utilities/getClientConfig'
 import { describe, expect, it, vi } from 'vitest'
 
 import { NestedDocsPageTreeListView } from './PageTreeListView.server.js'
 
-vi.mock('@payloadcms/ui/rsc', () => ({
-  getColumns: vi.fn(),
-  renderTable: vi.fn(),
+const uiMocks = vi.hoisted(() => ({
+  getColumns: vi.fn(() => []),
+  renderTable: vi.fn(() => Promise.resolve({ columnState: [], Table: null })),
 }))
 
-vi.mock('@payloadcms/ui/utilities/getClientConfig', () => ({
+const configMocks = vi.hoisted(() => ({
   getClientConfig: vi.fn(),
+}))
+
+const payloadMocks = vi.hoisted(() => ({
+  extractJWT: vi.fn(() => null),
+}))
+
+vi.mock('@payloadcms/ui/rsc', () => uiMocks)
+
+vi.mock('@payloadcms/ui/utilities/getClientConfig', () => configMocks)
+
+vi.mock('payload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('payload')>()),
+  extractJWT: payloadMocks.extractJWT,
 }))
 
 vi.mock('next/headers', () => ({
@@ -25,46 +36,59 @@ vi.mock('./PageTreeListView.client.js', () => ({
 
 describe('NestedDocsPageTreeListView', () => {
   it('passes the incoming request headers to the collection base filter', async () => {
+    let cookie: null | string = null
     const baseFilter = ({ req }: { req: PayloadRequest }) => {
-      throw new Error(req.headers.get('cookie') ?? '')
-    }
+      cookie = req.headers.get('cookie')
 
-    await expect(
-      NestedDocsPageTreeListView({
-        collectionConfig: {
-          admin: {
-            baseFilter,
-            useAsTitle: 'title',
+      return {}
+    }
+    const collectionConfig = {
+      slug: 'pages',
+      admin: {
+        baseFilter,
+        useAsTitle: 'title',
+      },
+      custom: {
+        nestedDocsPageTreePlugin: {
+          badges: {
+            colors: {},
+            labels: {},
           },
-          custom: {
-            nestedDocsPageTreePlugin: {
-              badges: {
-                colors: {},
-                labels: {},
-              },
-              breadcrumbsFieldSlug: 'breadcrumbs',
-              defaultLimit: 100,
-              hideBreadcrumbs: true,
-              homeIndicator: {
-                enabled: false,
-              },
-              parentFieldSlug: 'parent',
-            },
+          breadcrumbsFieldSlug: 'breadcrumbs',
+          defaultLimit: 100,
+          hideBreadcrumbs: true,
+          homeIndicator: {
+            enabled: false,
           },
+          parentFieldSlug: 'parent',
         },
-        collectionSlug: 'pages',
-        data: {
-          page: 1,
+      },
+    }
+    configMocks.getClientConfig.mockReturnValue({ collections: [collectionConfig] })
+
+    await NestedDocsPageTreeListView({
+      collectionConfig,
+      collectionSlug: 'pages',
+      columnState: [],
+      data: {
+        page: 1,
+      },
+      i18n: { t: (key: string) => key },
+      listPreferences: {},
+      payload: {
+        config: {
+          i18n: { fallbackLanguage: 'en' },
         },
-        i18n: { t: (key: string) => key },
-        listPreferences: {},
-        payload: { config: { i18n: { fallbackLanguage: 'en' } } },
-        user: null,
-      }),
-    ).rejects.toThrow('payload-tenant=tenant-1')
+        find: vi.fn(() => Promise.resolve({ docs: [] })),
+      },
+      user: null,
+    })
+
+    expect(cookie).toBe('payload-tenant=tenant-1')
   })
 
   it('passes both version-specific URLs to the client using a single accessible current-row read', async () => {
+    payloadMocks.extractJWT.mockClear()
     const currentDoc = {
       id: 1,
       slug: 'old',
@@ -77,11 +101,25 @@ describe('NestedDocsPageTreeListView', () => {
       _status: 'draft',
       breadcrumbs: [{ url: '/new-parent/new' }],
     }
+    const secondCurrentDoc = {
+      ...currentDoc,
+      id: 2,
+      slug: 'second-old',
+      breadcrumbs: [{ url: '/second-old' }],
+    }
+    const secondDraftDoc = {
+      ...draftDoc,
+      id: 2,
+      slug: 'second-new',
+      breadcrumbs: [{ url: '/second-new' }],
+    }
     const find = vi.fn(({ draft, fallbackLocale, locale, overrideAccess }) => {
       expect(overrideAccess).toBe(false)
       expect(locale).toBe('en')
       expect(fallbackLocale).toBe(false)
-      return Promise.resolve({ docs: draft ? [draftDoc] : [currentDoc] })
+      return Promise.resolve({
+        docs: draft ? [draftDoc, secondDraftDoc] : [currentDoc, secondCurrentDoc],
+      })
     })
     const collectionConfig = {
       slug: 'pages',
@@ -93,9 +131,9 @@ describe('NestedDocsPageTreeListView', () => {
       custom: {
         nestedDocsPageTreePlugin: {
           badges: { colors: {}, labels: {} },
+          badgesLinks: { liveURL: 'https://example.com' },
           breadcrumbsFieldSlug: 'breadcrumbs',
           defaultLimit: 100,
-          badgesLinks: { liveURL: 'https://example.com' },
           hideBreadcrumbs: true,
           homeIndicator: { enabled: false },
           parentFieldSlug: 'parent',
@@ -103,9 +141,7 @@ describe('NestedDocsPageTreeListView', () => {
       },
       versions: { drafts: true },
     }
-    vi.mocked(getClientConfig).mockReturnValue({ collections: [collectionConfig] } as never)
-    vi.mocked(getColumns).mockReturnValue([])
-    vi.mocked(renderTable).mockResolvedValue({ columnState: [] } as never)
+    configMocks.getClientConfig.mockReturnValue({ collections: [collectionConfig] })
     const result = await NestedDocsPageTreeListView({
       collectionConfig,
       collectionSlug: 'pages',
@@ -136,6 +172,7 @@ describe('NestedDocsPageTreeListView', () => {
       result.props.sourceDocs[0].__pageTreeStatusLinks,
     )
     expect(find).toHaveBeenCalledTimes(2)
+    expect(payloadMocks.extractJWT).toHaveBeenCalledTimes(1)
     expect(result.props.badgesLinks).toEqual({ liveURL: 'https://example.com' })
   })
 })
